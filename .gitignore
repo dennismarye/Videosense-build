@@ -27,4 +27,3 @@ htmlcov/
 temp_processed/
 .pytest_cache/
 myenv/
-__pycache__
