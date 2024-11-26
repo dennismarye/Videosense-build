@@ -1,0 +1,12 @@
+fastapi==0.110.0
+uvicorn==0.22.0
+confluent-kafka
+setuptools
+ffmpeg-python
+tqdm
+google-generativeai
+Pillow
+slack_sdk
+aws-msk-iam-sasl-signer-python
+pydantic_settings
+pydantic
