@@ -8,6 +8,9 @@ from src.services.kafka_service import KafkaService
 from src.video_processor.video_processor import VideoProcessor
 from src.monitoring.health_check import KafkaMonitorService
 from contextlib import asynccontextmanager
+import asyncio
+
+
 
 # Configure logging
 logging.basicConfig(
@@ -21,47 +24,54 @@ monitor = KafkaMonitorService()
 video_processor = VideoProcessor()
 
 
-# Background task to process Kafka messages
-async def process_kafka_messages():
-    """
-    Continuously process Kafka messages in the background
-    """
-    def message_handler(message_data):
-        # Asynchronous message processing
-        asyncio.create_task(video_processor.process_videos(message_data))
-    
-
-    logging.info("Kafka message processor started.")
+# Run Kafka consumer in a thread
+def run_kafka_consumer():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        async for message in kafka_service.consume(topics=[settings.INPUT_TOPIC,],message_handler=message_handler):
-            # Process each message asynchronously
-            asyncio.create_task(video_processor.process_videos(message))
-    except asyncio.CancelledError:
-        logging.info("Kafka message processor task cancelled.")
-    except Exception as e:
-        logging.error(f"Error in Kafka message processing: {e}")
-        monitor.update_consumer_status("Failed")
+        loop.run_until_complete(kafka_service.consume(
+            topics=[settings.INPUT_TOPIC],
+            message_handler=process_kafka_message
+        ))
     finally:
-        logging.info("Kafka message processor stopped.")
+        loop.close()
 
+# Background task to process Kafka messages
+async def process_kafka_message(message_data):
+    try:
+        logging.info(f"Received message: {message_data}")
+        processed_result = await video_processor.process_videos(message_data)
+        if processed_result:
+            await kafka_service.produce(
+                topic=settings.OUTPUT_TOPIC,
+                message=processed_result
+            )
+            logging.info(f"Produced result to {settings.OUTPUT_TOPIC}: {processed_result}")
+        else:
+            logging.warning("Processed result is empty or None.")
+    except Exception as e:
+        logging.error(f"Error in message processing: {e}")
+
+
+import threading
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan handler for application startup and shutdown events
-    """
     logging.info("Starting application...")
-    app.state.kafka_task = asyncio.create_task(process_kafka_messages())
+    kafka_thread = threading.Thread(target=run_kafka_consumer, daemon=True)
+    try:
+        kafka_thread.start()
+        initial_status = monitor.get_health_status()
+        logging.info(f"Initial System Status: {initial_status}")
+    except Exception as e:
+        logging.error(f"Application Startup Failed: {e}")
+        monitor.update_kafka_connection(False)
+
     yield
+
     logging.info("Shutting down application...")
-    kafka_task = app.state.kafka_task
-    if kafka_task:
-        kafka_task.cancel()
-        try:
-            await kafka_task
-        except asyncio.CancelledError:
-            logging.info("Kafka task successfully cancelled.")
     await kafka_service.close_consumer()
+    logging.info("Kafka consumer stopped.")
 
 # FastAPI Application
 app = FastAPI(
@@ -71,15 +81,22 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-@app.get("/health")
+@app.get("/")
 async def health_check():
     """Comprehensive health check endpoint"""
-    status = monitor.get_health_status()
-    return JSONResponse(
-        status_code=200 if status['status'] == 'healthy' else 500,
-        content=status
-    )
-
+    try:
+        status = monitor.get_health_status()
+        logging.info(f"Health Check Status: {status}")  # Add detailed logging
+        return JSONResponse(
+            status_code=200 if status['status'] == 'healthy' else 500,
+            content=status
+        )
+    except Exception as e:
+        logging.error(f"Health Check Failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
 
 def run():
     """
@@ -90,8 +107,10 @@ def run():
         "test_main:app", 
         host=settings.SERVER_HOST, 
         port=settings.SERVER_PORT,
-        reload=True
+        reload=True,
+        log_level="debug"
     )
+
 
 if __name__ == "__main__":
     run()

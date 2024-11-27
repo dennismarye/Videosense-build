@@ -10,6 +10,7 @@ from src.monitoring.health_check import KafkaMonitorService
 
 from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
 
+
 class KafkaService:
     """
     Comprehensive Kafka Service with robust error handling and monitoring
@@ -27,6 +28,8 @@ class KafkaService:
         self.producer_conf = {
             "bootstrap.servers": settings.KAFKA_BROKER,
             "client.id": settings.MICROSERVICE_CLIENTID,
+            "log_level": settings.LOG_LEVEL
+            
         }
         
         # SSL Configuration
@@ -73,10 +76,15 @@ class KafkaService:
             
             # Create admin client for topic management
             self.admin_client = AdminClient({
-                'bootstrap.servers': settings.KAFKA_BROKER,
                 **self.producer_conf
             })
-            
+
+            try:
+                cluster_metadata = self.admin_client.list_topics(timeout=10)
+                print(f"Broker version likely supports Kafka {cluster_metadata}")
+            except Exception as e:
+                print(f"Failed to fetch metadata: {e}")
+                    
             # Update monitoring status
             self.monitor.update_kafka_connection(True)
             logging.info("Kafka clients initialized successfully")
@@ -85,7 +93,7 @@ class KafkaService:
             logging.error(f"Failed to initialize Kafka clients: {e}")
             raise
     
-    def create_topic(self, topic_name: str, num_partitions: int = 1, replication_factor: int = 1):
+    async def create_topic(self, topic_name: str, num_partitions: int = 1, replication_factor: int = 1):
         """
         Create a Kafka topic with error handling and idempotency
         """
@@ -105,13 +113,13 @@ class KafkaService:
         except Exception as e:
             logging.error(f"Error in topic creation: {e}")
     
-    def produce(self, topic: str, data: Dict[str, Any]):
+    async def produce(self, topic: str, data: Dict[str, Any]):
         """
         Produce message to Kafka topic with error handling
         """
         try:
             # Ensure topic exists
-            self.create_topic(topic)
+            await self.create_topic(topic)
             
             # Convert data to JSON
             data_json = json.dumps(data).encode("utf-8")
@@ -126,7 +134,7 @@ class KafkaService:
             logging.error(f"Error producing message: {e}")
             return {"status": "error", "message": str(e)}
     
-    def consume(self, topics: list, message_handler):
+    async def consume(self, topics: list, message_handler):
         """
         Consume messages from specified topics with advanced error handling
         """
@@ -134,8 +142,6 @@ class KafkaService:
             # Subscribe to topics
             self.consumer.subscribe(topics)
             logging.info(f"Subscribed to topics: {topics}")
-            
-            
             
             while True:
                 msg = self.consumer.poll(1.0)
@@ -166,3 +172,12 @@ class KafkaService:
             self.monitor.update_consumer_status("Failed")
         finally:
             self.consumer.close()
+
+
+    async def close_consumer(self):
+        try:
+            self.consumer.close()
+            logging.info("Consumer is closed")
+        except:
+            logging.error("Issues closing the consumer")
+        

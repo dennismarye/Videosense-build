@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY src/ ./src/
 
+COPY test_main.py .
+
 # Expose FastAPI port
 EXPOSE 8000
 
 # Run the application
-CMD ["uvicorn", "test_main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD python3 test_main.py
