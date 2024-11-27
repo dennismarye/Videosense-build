@@ -26,6 +26,5 @@ ENV/
 htmlcov/
 temp_processed/
 .pytest_cache/
-.pytest_cache/pytest_cache/
 myenv/
 src/config/.env
