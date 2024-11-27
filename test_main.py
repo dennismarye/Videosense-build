@@ -98,19 +98,38 @@ async def health_check():
             content={"status": "error", "message": str(e)}
         )
 
-def run():
-    """
-    Run the application
-    """
-    import uvicorn
-    uvicorn.run(
-        "test_main:app", 
-        host=settings.SERVER_HOST, 
-        port=settings.SERVER_PORT,
-        reload=True,
-        log_level="debug"
-    )
-
 
 if __name__ == "__main__":
-    run()
+    import uvicorn
+    import socket
+
+    try:
+        # Explicit binding with multiple options
+        uvicorn.run(
+            "test_main:app",  # Confirm this matches your module name exactly
+            host="0.0.0.0",  # Listen on all interfaces
+            port=8000,
+            reload=True,
+            workers=1,
+            log_level="debug"
+        )
+    except Exception as e:
+        print(f"Server startup failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+# def run():
+#     """
+#     Run the application
+#     """
+#     import uvicorn
+#     uvicorn.run(
+#         "test_main:app", 
+#         host=settings.SERVER_HOST, 
+#         port=settings.SERVER_PORT,
+#         reload=True,
+#         log_level="debug"
+#     )
+
+# if __name__ == "__main__":
+#     run()
