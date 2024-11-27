@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     MERGED_OUTPUT_DIR: str = "merged_videos"
     
     # Server Configuration
-    SERVER_HOST: str = "0.0.0.0"
-    SERVER_PORT: int = 8000
+    SERVER_HOST: str
+    SERVER_PORT: int
     
     # Model configuration for environment variable loading
     model_config = SettingsConfigDict(
