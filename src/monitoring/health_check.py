@@ -41,9 +41,6 @@ class KafkaMonitorService:
         return {
             "status": "healthy" if self.kafka_broker_connection else "unhealthy",
             "kafka_broker_connection": self.kafka_broker_connection,
-            "consumer_status": self.consumer_status,
-            "producer_status": self.producer_status,
             "last_successful_message": str(self.last_successful_message) if self.last_successful_message else None,
-            "error_count": self.error_count,
             "timestamp": datetime.utcnow().isoformat()
         }

@@ -9,6 +9,7 @@ from src.video_processor.video_processor import VideoProcessor
 from src.monitoring.health_check import KafkaMonitorService
 from contextlib import asynccontextmanager
 import asyncio
+import uvicorn
 
 
 
@@ -100,8 +101,6 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    import uvicorn
-    import socket
 
     try:
         # Explicit binding with multiple options
@@ -117,19 +116,3 @@ if __name__ == "__main__":
         print(f"Server startup failed: {e}")
         import traceback
         traceback.print_exc()
-
-# def run():
-#     """
-#     Run the application
-#     """
-#     import uvicorn
-#     uvicorn.run(
-#         "test_main:app", 
-#         host=settings.SERVER_HOST, 
-#         port=settings.SERVER_PORT,
-#         reload=True,
-#         log_level="debug"
-#     )
-
-# if __name__ == "__main__":
-#     run()
