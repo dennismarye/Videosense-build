@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     MICROSERVICE_GROUPID: str
     KAFKA_ADMIN_CLIENT: str
     AWS_REGION: str
+    WORKERS: int 
     
     # SSL and Security
     KAFKA_SSL: bool = False

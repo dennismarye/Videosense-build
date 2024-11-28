@@ -106,8 +106,8 @@ if __name__ == "__main__":
         # Explicit binding with multiple options
         uvicorn.run(
             "test_main:app",  # Confirm this matches your module name exactly
-            host="0.0.0.0",  # Listen on all interfaces
-            port=8000,
+            host=settings.SERVER_HOST,  # Listen on all interfaces
+            port=settings.SERVER_PORT,
             reload=True,
             workers=1,
             log_level="debug"
