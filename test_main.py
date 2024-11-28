@@ -109,7 +109,7 @@ if __name__ == "__main__":
             host=settings.SERVER_HOST,  # Listen on all interfaces
             port=settings.SERVER_PORT,
             reload=True,
-            workers=1,
+            workers=settings.WORKERS,
             log_level="debug"
         )
     except Exception as e:
