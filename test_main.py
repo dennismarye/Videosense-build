@@ -10,6 +10,7 @@ from src.monitoring.health_check import KafkaMonitorService
 from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
+import threading
 
 
 
@@ -54,7 +55,6 @@ async def process_kafka_message(message_data):
         logging.error(f"Error in message processing: {e}")
 
 
-import threading
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

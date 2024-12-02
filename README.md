@@ -42,7 +42,7 @@ export AWS_REGION=us-east-1
 ```
 
 ### 5. Configure Application
-1. Copy `.env.example` to `.env`
+1. Copy `.env` to `.env`
 2. Edit `.env` with your specific configurations
 ```bash
 cp .env.example .env
