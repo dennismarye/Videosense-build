@@ -107,7 +107,7 @@ if __name__ == "__main__":
         uvicorn.run(
             "test_main:app",  # Confirm this matches your module name exactly
             host=settings.SERVER_HOST,  # Listen on all interfaces
-            port=settings.SERVER_PORT,
+            port=settings.PORT,
             reload=True,
             workers=settings.WORKERS,
             log_level="debug"

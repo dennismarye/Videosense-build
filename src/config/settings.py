@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     
     # Server Configuration
     SERVER_HOST: str
-    SERVER_PORT: int
+    PORT: int
+    SLACK_BOT_TOKEN: str
+    GEMINI_KEY: str
+    
     
     # Model configuration for environment variable loading
     model_config = SettingsConfigDict(
