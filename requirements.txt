@@ -10,3 +10,4 @@ aws-msk-iam-sasl-signer-python
 pydantic_settings
 pydantic
 setuptools
+google-generativeai
