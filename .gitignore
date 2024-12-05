@@ -28,3 +28,4 @@ temp_processed/
 .pytest_cache/
 myenv/
 src/config/.env
+*.__pycache__
