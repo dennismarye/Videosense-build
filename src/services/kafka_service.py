@@ -145,10 +145,10 @@ class KafkaService:
             
             while True:
                 msg = self.consumer.poll(1.0)
-                logging.info("Polling for messages...")
+                # logging.info("Polling for messages...")
                 
                 if msg is None:
-                    logging.info("No message received.")
+                    # logging.info("No message received.")
                     continue
                 
                 if msg.error():

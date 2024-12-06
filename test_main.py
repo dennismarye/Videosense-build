@@ -11,6 +11,9 @@ from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
 import threading
+import os
+import subprocess
+
 
 
 
@@ -101,18 +104,24 @@ async def health_check():
 
 
 if __name__ == "__main__":
-
     try:
-        # Explicit binding with multiple options
-        uvicorn.run(
-            "test_main:app",  # Confirm this matches your module name exactly
-            host=settings.SERVER_HOST,  # Listen on all interfaces
-            port=settings.PORT,
-            reload=True,
-            workers=settings.WORKERS,
-            log_level="debug"
-        )
-    except Exception as e:
-        print(f"Server startup failed: {e}")
+        # Construct the gunicorn command
+        cmd = [
+            "gunicorn",
+            "test_main:app",  # Confirm this matches your module and app name exactly
+            "--bind", f"{os.getenv('SERVER_HOST')}:{os.getenv('PORT')}",  # Host and port
+            "--workers", os.getenv('WORKERS'),  # Number of workers
+            "--log-level", os.getenv('LOG_LEVEL'),  # Logging level
+            "-k", "uvicorn.workers.UvicornWorker"  # Specify the ASGI worker
+        ]
+        
+        # Start the Gunicorn server
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Server startup failed with exit code {e.returncode}: {e}")
+        import traceback
+        traceback.print_exc()
+    except Exception as ex:
+        print(f"Unexpected error: {ex}")
         import traceback
         traceback.print_exc()
