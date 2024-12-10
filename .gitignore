@@ -28,6 +28,12 @@ temp_processed/
 .pytest_cache/
 myenv/
 src/config/.env
+.pre-commit-config.yaml
+compressed_videos
+merged_videos
+appenv
+.mypy_cache
+__pycache__
 .DS_Store
 .vscode
 .vscode*
@@ -36,3 +42,4 @@ vscode*
 *.pyc
 *.pyo
 *.pyd
+
