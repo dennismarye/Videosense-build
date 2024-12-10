@@ -41,4 +41,3 @@ EXPOSE 41295
 # Use entrypoint for more flexible command execution
 ENTRYPOINT ["python3"]
 CMD ["test_main.py"]
-
