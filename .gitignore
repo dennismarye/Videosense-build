@@ -29,3 +29,4 @@ temp_processed/
 myenv/
 src/config/.env
 *.__pycache__
+.pre-commit-config.yaml
