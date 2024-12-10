@@ -29,7 +29,6 @@ class VideoProcessor:
             except Exception as e:
                 logging.error(f"Error deleting file {file}: {e}")
 
-
     async def create_image_grid(images, output_path):
         """Create a grid of images with an automatically adjusted size and save the result."""
         try:
@@ -60,13 +59,11 @@ class VideoProcessor:
             logging.error(f"Error creating image grid: {e}")
             return None
 
-
     def calculate_grid_size(num_images):
         """Calculate the optimal grid size (columns, rows) for a given number of images."""
         columns = math.ceil(math.sqrt(num_images))  # Number of columns in the grid
         rows = math.ceil(num_images / columns)  # Number of rows in the grid
         return columns, rows
-
 
     async def resize_images(input_files, target_size=(640, 480)):
         """Resize images to the target size and save them to the specified directory."""
@@ -90,7 +87,6 @@ class VideoProcessor:
             except Exception as e:
                 logging.error(f"Error resizing image {file}: {e}")
         return resized_files
-
 
     async def process_videos(data):
         try:
@@ -162,7 +158,9 @@ class VideoProcessor:
                         merged_output_dir, f"{job_id}_merged.mp4"
                     )
                     # Create a temporary file to list the input videos
-                    concat_file_path = os.path.join(merged_output_dir, "concat_files.txt")
+                    concat_file_path = os.path.join(
+                        merged_output_dir, "concat_files.txt"
+                    )
 
                     try:
                         # Write the list of files to a temporary text file
@@ -197,10 +195,14 @@ class VideoProcessor:
                             os.remove(concat_file_path)
                             os.remove(merged_file_path)
                 elif all(
-                    file.endswith(tuple([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"]))
+                    file.endswith(
+                        tuple([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"])
+                    )
                     for file in compressed_files
                 ):
-                    grid_output_path = os.path.join(merged_output_dir, f"{job_id}_grid.jpg")
+                    grid_output_path = os.path.join(
+                        merged_output_dir, f"{job_id}_grid.jpg"
+                    )
 
                     resized_files = await VideoProcessor.resize_images(compressed_files)
 
