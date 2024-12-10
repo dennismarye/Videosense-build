@@ -30,3 +30,8 @@ myenv/
 src/config/.env
 *.__pycache__
 .pre-commit-config.yaml
+compressed_videos
+merged_videos
+appenv
+.mypy_cache
+__pycache__
