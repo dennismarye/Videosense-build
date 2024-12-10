@@ -28,4 +28,11 @@ temp_processed/
 .pytest_cache/
 myenv/
 src/config/.env
+.DS_Store
+.vscode
+.vscode*
+vscode*
 *.__pycache__
+*.pyc
+*.pyo
+*.pyd
