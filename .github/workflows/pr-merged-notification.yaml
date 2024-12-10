@@ -1,0 +1,80 @@
+name: Notify Google Chat PR merged Events
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  notify-pr-merge:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Debug Info
+        run: |
+          echo "event: ${{ github.event }}"
+          echo "Pull Request Context: $(echo '${{ toJson(github.event.pull_request) }}' | jq .)"
+
+      - name: Send notification to Google Chat for PR Merge
+        run: |
+          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" \
+            -H 'Content-Type: application/json' \
+            -d '{
+                  "cards": [
+                    {
+                      "header": {
+                        "title": "Pull Request Merged",
+                        "subtitle": "Repository: '${{ github.repository }}'",
+                        "imageUrl": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                      },
+                      "sections": [
+                        {
+                          "widgets": [
+                            {
+                              "keyValue": {
+                                "topLabel": "Branch",
+                                "content": "'${{ github.ref }}'"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "Title",
+                                "content": "${{ github.event.pull_request.title }}"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "Commit",
+                                "content": "'${{ github.sha }}'"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "Committer",
+                                "content": "'${{ github.actor }}'"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "merged by",
+                                "content": "${{ github.event.pull_request.merged_by.login }}"
+                              }
+                            },
+                            {
+                              "textParagraph": {
+                                "text": "<b>Pull Request URL:</b> <a href=\"${{ github.event.pull_request.html_url }}\">Click here to view the PR</a>"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }'
