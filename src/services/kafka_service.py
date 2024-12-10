@@ -169,7 +169,7 @@ class KafkaService:
                 # Process message
                 try:
                     message_data = json.loads(msg.value().decode("utf-8"))
-                    message_handler(message_data)
+                    await message_handler(message_data)
                 except json.JSONDecodeError:
                     logging.error("Failed to decode message")
                 except Exception as e:
