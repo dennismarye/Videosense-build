@@ -19,7 +19,7 @@ os.makedirs(merged_output_dir, exist_ok=True)
 
 
 class VideoProcessor:
-
+    @staticmethod
     def cleanup_files(files):
         """Delete the specified files."""
         for file in files:
@@ -29,6 +29,7 @@ class VideoProcessor:
             except Exception as e:
                 logging.error(f"Error deleting file {file}: {e}")
 
+    @staticmethod
     async def create_image_grid(images, output_path):
         """Create a grid of images with an automatically adjusted size and save the result."""
         try:
@@ -59,12 +60,14 @@ class VideoProcessor:
             logging.error(f"Error creating image grid: {e}")
             return None
 
+    @staticmethod
     def calculate_grid_size(num_images):
         """Calculate the optimal grid size (columns, rows) for a given number of images."""
         columns = math.ceil(math.sqrt(num_images))  # Number of columns in the grid
         rows = math.ceil(num_images / columns)  # Number of rows in the grid
         return columns, rows
 
+    @staticmethod
     async def resize_images(input_files, target_size=(640, 480)):
         """Resize images to the target size and save them to the specified directory."""
         resized_files = []
@@ -88,6 +91,7 @@ class VideoProcessor:
                 logging.error(f"Error resizing image {file}: {e}")
         return resized_files
 
+    @staticmethod
     async def process_videos(data):
         try:
             job_id = data.get("data", {}).get("jobId", "unknown")
@@ -100,7 +104,7 @@ class VideoProcessor:
 
             for file in files:
                 file_url = file.get("lite", "")
-                if file["fileType"] == "video" and file_url:
+                if file["fileType"] == "Video" and file_url:
                     compressed_file_path = os.path.join(
                         output_dir, f"{file['name']}_compressed.mp4"
                     )
@@ -118,7 +122,7 @@ class VideoProcessor:
                             f"Error compressing video {file['name']}: {e.stderr.decode()}"
                         )
 
-                elif file["fileType"] == "image" and file_url:
+                elif file["fileType"] == "Image" and file_url:
                     compressed_file_path = os.path.join(
                         output_dir, f"{file['name']}_compressed.jpg"
                     )

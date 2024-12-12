@@ -24,7 +24,6 @@ logging.basicConfig(
 # Initialize services
 kafka_service = KafkaService()
 monitor = KafkaMonitorService()
-video_processor = VideoProcessor()
 
 
 # Run Kafka consumer in a thread
@@ -45,7 +44,7 @@ def run_kafka_consumer():
 async def process_kafka_message(message_data):
     try:
         logging.info(f"Received message: {message_data}")
-        processed_result = await video_processor.process_videos(message_data)
+        processed_result = await VideoProcessor.process_videos(message_data)
         if processed_result:
             await kafka_service.produce(
                 topic=settings.OUTPUT_TOPIC, message=processed_result
