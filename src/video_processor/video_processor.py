@@ -103,7 +103,8 @@ class VideoProcessor:
                 return {"error": "No valid files found in the data"}
 
             for file in files:
-                file_url = file.get("lite", "")
+                file_url = file.get("cachedOriginal", "")
+
                 if file["fileType"] == "Video" and file_url:
                     compressed_file_path = os.path.join(
                         output_dir, f"{file['name']}_compressed.mp4"
