@@ -47,7 +47,7 @@ async def process_kafka_message(message_data):
         processed_result = await VideoProcessor.process_videos(message_data)
         if processed_result:
             await kafka_service.produce(
-                topic=settings.OUTPUT_TOPIC, message=processed_result
+                topic=settings.OUTPUT_TOPIC, data=processed_result
             )
             logging.info(
                 f"Produced result to {settings.OUTPUT_TOPIC}: {processed_result}"

@@ -112,10 +112,11 @@ class VideoProcessor:
                     try:
                         ffmpeg.input(file_url).output(
                             compressed_file_path,
-                            vf="scale=640:-1,fps=15",
+                            vf="scale=iw:trunc(ih/2)*2,fps=15",
                             video_bitrate="400k",
                             audio_bitrate="64k",
                             vcodec="libx265",
+                            pix_fmt="yuv420p",
                         ).overwrite_output().run(quiet=True)
                         compressed_files.append(compressed_file_path)
                     except ffmpeg.Error as e:
