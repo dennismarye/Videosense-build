@@ -7,6 +7,8 @@ gunicorn
 Pillow
 pydantic
 pydantic_settings
+pytest
+pytest-asyncio
 setuptools
 setuptools
 slack_sdk
