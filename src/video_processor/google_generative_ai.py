@@ -4,6 +4,16 @@ import google.generativeai as genai
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from src.config.settings import settings
+import logging
+from typing import Optional
+
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, "INFO"),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 
 # Environment variable checks and initializations
 gemini_key = settings.GEMINI_KEY
@@ -36,10 +46,10 @@ def send_message_to_slack(channel: str, text: str):
 def send_report_to_slack(
     video_file_name: str,
     video_file_link: str,
-    content: str,
     success: bool,
-    error: Exception,
-    tags: str,
+    content: Optional[Exception] = None,
+    error: Optional[Exception] = None,
+    tags: Optional[Exception] = None,
 ):
     """Sends a well-formatted Slack message based on the success or failure of the tagging process."""
     if success:
@@ -105,8 +115,9 @@ def generate_video_tags(video_file_path, data):
             Categories:
             Harassment
             Hate-speech
-            Sexually-explicit
             Dangerous
+            Violence
+            Gore
             Harmful-content
             Civic-integrity
             Comedy & Memes
@@ -162,10 +173,11 @@ def generate_video_tags(video_file_path, data):
         harmful_tags = [
             "Harassment",
             "Hate-speech",
-            "Sexually-explicit",
             "Dangerous",
             "Harmful-content",
             "Civic-integrity",
+            "Gore",
+            "Violence",
         ]
 
         if any(tag in tags for tag in harmful_tags):
@@ -188,5 +200,6 @@ def generate_video_tags(video_file_path, data):
         return tags
 
     except Exception as e:
+        logging.info(f"Error with tags: {str(e)}")
         send_report_to_slack(video_file_name, video_file_link, success=False, error=e)
         return f"Error generating tags: {str(e)}"
