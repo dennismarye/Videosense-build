@@ -33,7 +33,7 @@ async def test_process_videos_basic():
                     "version": 1,
                     "isDeleted": False,
                     "cachedLite": "",
-                    "cachedOriginal": "https://dzv0fidwp2q1d.cloudfront.net/video/meicam_1723825301907.mp4",
+                    "cachedOriginal": "https://dev-files.circleandclique.com/Birdsac4c8bf4-1c3d-4ca4-8821-d9d2a0b6b5ac.mp4",
                     "id": "67593ac9aced1565d6ea2bba",
                     "signed": "https://s3.eu-west-2.amazonaws.com/app.circleandclique.org/transcoded-videos/+v+i+d+e+o+c+3+f+a+0+f+a+a+-+7+d+d+0+-+4+8+f+9+-+9+6+f+1+-+5+f+1+4+5+2+8+c+d+4+3+a+-signed.mp4",
                 }
