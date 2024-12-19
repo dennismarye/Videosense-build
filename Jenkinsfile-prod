@@ -28,7 +28,7 @@ pipeline {
                 rm -rf venv
                 # Create a new virtual environment
                 python3 -m venv venv
-                source venv/bin/activate
+                . venv/bin/activate
                 '''
             }
         }
@@ -36,8 +36,7 @@ pipeline {
         stage('Install Python dependencies') {
             steps {
                 sh '''
-                #!/bin/bash
-                source venv/bin/activate
+                . venv/bin/activate
                 python -m pip install --upgrade pip
                 pip install -r requirements.txt
                 pip install pytest httpx requests
@@ -49,7 +48,7 @@ pipeline {
         stage('Lint with flake8') {
             steps {
                 sh '''
-                source venv/bin/activate
+                . venv/bin/activate
                 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
                 flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
                 '''
@@ -59,7 +58,7 @@ pipeline {
         stage('Check formatting with Black') {
             steps {
                 sh '''
-                source venv/bin/activate
+                . venv/bin/activate
                 black --check .
                 '''
             }
@@ -68,7 +67,7 @@ pipeline {
         // stage('Type checking with mypy') {
         //     steps {
         //         sh '''
-        //         source venv/bin/activate
+        //         . venv/bin/activate
         //         mypy src/
         //         '''
         //     }
@@ -77,7 +76,7 @@ pipeline {
         // stage('Run tests') {
         //     steps {
         //         sh '''
-        //         source venv/bin/activate
+        //         . venv/bin/activate
         //         pytest tests/
         //         '''
         //     }
