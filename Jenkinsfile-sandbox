@@ -37,14 +37,14 @@ pipeline {
                 pip install flake8 black mypy
 
                 # Lint with flake8
-                flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-                flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+                flake8 --exclude=venv,build,dist,*.egg --count --select=E9,F63,F7,F82 --show-source --statistics
+                flake8 --exclude=venv,build,dist,*.egg --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
                 # Check formatting with Black
-                black --check .
+                black --check . --exclude="(venv/|build/|dist/)"
 
                 #Type checking with mypy
-                #mypy src/
+                #mypy . --exclude "venv|build|dist"
 
                 #Running unit test with pytest
                 #pytest tests/
