@@ -20,67 +20,37 @@ pipeline {
             }
         }
 
-        stage('Set up Python') {
+        stage('Set up Python Build, Lint and Tests') {
             steps {
                 sh '''
-                #!/bin/bash
                 # Remove previous venv if it exists
                 rm -rf venv
+
                 # Create a new virtual environment
                 python3 -m venv venv
                 . venv/bin/activate
-                '''
-            }
-        }
 
-        stage('Install Python dependencies') {
-            steps {
-                sh '''
-                . venv/bin/activate
+                #Install Python dependencies
                 python -m pip install --upgrade pip
                 pip install -r requirements.txt
                 pip install pytest httpx requests
                 pip install flake8 black mypy
-                '''
-            }
-        }
 
-        stage('Lint with flake8') {
-            steps {
-                sh '''
-                . venv/bin/activate
+                # Lint with flake8
                 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
                 flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-                '''
-            }
-        }
 
-        stage('Check formatting with Black') {
-            steps {
-                sh '''
-                . venv/bin/activate
+                # Check formatting with Black
                 black --check .
+
+                #Type checking with mypy
+                #mypy src/
+
+                #Running unit test with pytest
+                #pytest tests/
                 '''
             }
         }
-
-        // stage('Type checking with mypy') {
-        //     steps {
-        //         sh '''
-        //         . venv/bin/activate
-        //         mypy src/
-        //         '''
-        //     }
-        // }
-
-        // stage('Run tests') {
-        //     steps {
-        //         sh '''
-        //         . venv/bin/activate
-        //         pytest tests/
-        //         '''
-        //     }
-        // }
 
         // stage('SonarQube Analysis') {
         //     steps {
