@@ -23,6 +23,7 @@ pipeline {
         stage('Set up Python') {
             steps {
                 sh '''
+                #!/bin/bash
                 # Remove previous venv if it exists
                 rm -rf venv
                 # Create a new virtual environment
@@ -35,6 +36,7 @@ pipeline {
         stage('Install Python dependencies') {
             steps {
                 sh '''
+                #!/bin/bash
                 source venv/bin/activate
                 python -m pip install --upgrade pip
                 pip install -r requirements.txt
