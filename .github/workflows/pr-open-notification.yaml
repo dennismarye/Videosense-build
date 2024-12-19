@@ -1,0 +1,56 @@
+name: Notify Google Chat on PR Open Events
+
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  notify-pr-opened:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send notification to Google Chat for PR Opened
+        run: |
+          curl -X POST "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" \
+            -H 'Content-Type: application/json' \
+            -d '{
+                  "cards": [
+                    {
+                      "header": {
+                        "title": "Pull Request Opened",
+                        "subtitle": "Repository: ${{ github.repository }}",
+                        "imageUrl": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+                      },
+                      "sections": [
+                        {
+                          "widgets": [
+                            {
+                              "keyValue": {
+                                "topLabel": "Title",
+                                "content": "${{ github.event.pull_request.title }}"
+                              }
+                            },
+                            {
+                              "textParagraph": {
+                                "text": "<b>Pull Request URL:</b> <a href=\"${{ github.event.pull_request.html_url }}\">Click here to view the PR</a>"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "Branch",
+                                "content": "${{ github.ref }}"
+                              }
+                            },
+                            {
+                              "keyValue": {
+                                "topLabel": "Author",
+                                "content": "${{ github.actor }}"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }'

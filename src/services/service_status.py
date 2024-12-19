@@ -1,10 +1,12 @@
 from datetime import datetime
 import threading
 
+
 class ServiceStatus:
     """
     Thread-safe service status tracking mechanism.
     """
+
     _instance = None
     _lock = threading.Lock()
 

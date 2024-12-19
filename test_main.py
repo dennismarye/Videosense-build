@@ -11,19 +11,19 @@ from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
 import threading
-
+import os
+import subprocess
 
 
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, "INFO"),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 # Initialize services
 kafka_service = KafkaService()
 monitor = KafkaMonitorService()
-video_processor = VideoProcessor()
 
 
 # Run Kafka consumer in a thread
@@ -31,29 +31,31 @@ def run_kafka_consumer():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(kafka_service.consume(
-            topics=[settings.INPUT_TOPIC],
-            message_handler=process_kafka_message
-        ))
+        loop.run_until_complete(
+            kafka_service.consume(
+                topics=[settings.INPUT_TOPIC], message_handler=process_kafka_message
+            )
+        )
     finally:
         loop.close()
+
 
 # Background task to process Kafka messages
 async def process_kafka_message(message_data):
     try:
         logging.info(f"Received message: {message_data}")
-        processed_result = await video_processor.process_videos(message_data)
+        processed_result = await VideoProcessor.process_videos(message_data)
         if processed_result:
             await kafka_service.produce(
-                topic=settings.OUTPUT_TOPIC,
-                message=processed_result
+                topic=settings.OUTPUT_TOPIC, data=processed_result
             )
-            logging.info(f"Produced result to {settings.OUTPUT_TOPIC}: {processed_result}")
+            logging.info(
+                f"Produced result to {settings.OUTPUT_TOPIC}: {processed_result}"
+            )
         else:
             logging.warning("Processed result is empty or None.")
     except Exception as e:
         logging.error(f"Error in message processing: {e}")
-
 
 
 @asynccontextmanager
@@ -74,13 +76,15 @@ async def lifespan(app: FastAPI):
     await kafka_service.close_consumer()
     logging.info("Kafka consumer stopped.")
 
+
 # FastAPI Application
 app = FastAPI(
     title="Video Processing Microservice",
     description="Kafka-based video processing microservice",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
+
 
 @app.get("/")
 async def health_check():
@@ -89,30 +93,40 @@ async def health_check():
         status = monitor.get_health_status()
         logging.info(f"Health Check Status: {status}")  # Add detailed logging
         return JSONResponse(
-            status_code=200 if status['status'] == 'healthy' else 500,
-            content=status
+            status_code=200 if status["status"] == "healthy" else 500, content=status
         )
     except Exception as e:
         logging.error(f"Health Check Failed: {e}")
         return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
+            status_code=500, content={"status": "error", "message": str(e)}
         )
 
 
 if __name__ == "__main__":
-
     try:
-        # Explicit binding with multiple options
-        uvicorn.run(
-            "test_main:app",  # Confirm this matches your module name exactly
-            host=settings.SERVER_HOST,  # Listen on all interfaces
-            port=settings.SERVER_PORT,
-            reload=True,
-            workers=settings.WORKERS,
-            log_level="debug"
-        )
-    except Exception as e:
-        print(f"Server startup failed: {e}")
+        # Construct the gunicorn command
+        cmd = [
+            "gunicorn",
+            "test_main:app",  # Confirm this matches your module and app name exactly
+            "--bind",
+            f"{os.getenv('SERVER_HOST')}:{os.getenv('PORT','8000')}",  # Host and port
+            "--workers",
+            os.getenv("WORKERS", "1"),  # Number of workers
+            "--log-level",
+            os.getenv("LOG_LEVEL", "info"),  # Logging level
+            "-k",
+            "uvicorn.workers.UvicornWorker",  # Specify the ASGI worker
+        ]
+
+        # Start the Gunicorn server
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Server startup failed with exit code {e.returncode}: {e}")
         import traceback
+
+        traceback.print_exc()
+    except Exception as ex:
+        print(f"Unexpected error: {ex}")
+        import traceback
+
         traceback.print_exc()
