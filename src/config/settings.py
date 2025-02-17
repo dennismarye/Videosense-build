@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     KAFKA_ADMIN_CLIENT: str
     AWS_REGION: str
     WORKERS: int
+    KAFKA_USERNAME: str
+    KAFKA_PASSWORD: str
+    KAFKA_AUTH_TYPE: str = "SCRAM"
 
     # SSL and Security
     KAFKA_SSL: bool = False

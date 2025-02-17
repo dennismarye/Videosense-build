@@ -20,59 +20,127 @@ class KafkaService:
         # Initialize monitoring service
         self.monitor = KafkaMonitorService()
 
-        # OAuth callback for AWS MSK authentication
-        def oauth_cb(oauth_config):
-            auth_token, expiry_ms = MSKAuthTokenProvider.generate_auth_token(
-                settings.AWS_REGION
-            )
-            return auth_token, expiry_ms / 1000
+        # Base configuration for both producer and consumer
+        self.base_conf = {
+            "bootstrap.servers": settings.KAFKA_BROKER,
+            "client.id": settings.MICROSERVICE_CLIENTID,
+            "client.dns.lookup": "use_all_dns_ips",
+            "reconnect.backoff.ms": "1000",
+            "reconnect.backoff.max.ms": "10000",
+            "retry.backoff.ms": "1000",
+        }
+
+        # Configure authentication based on settings
+        if settings.KAFKA_SSL:
+            if settings.KAFKA_AUTH_TYPE == "SCRAM":
+                self.base_conf.update(
+                    {
+                        "security.protocol": "SASL_SSL",
+                        "sasl.mechanism": "SCRAM-SHA-512",
+                        "sasl.username": settings.KAFKA_USERNAME,
+                        "sasl.password": settings.KAFKA_PASSWORD,
+                    }
+                )
+            elif settings.KAFKA_AUTH_TYPE == "IAM":
+                # OAuth callback for AWS MSK authentication
+                def oauth_cb(oauth_config):
+                    auth_token, expiry_ms = MSKAuthTokenProvider.generate_auth_token(
+                        settings.AWS_REGION
+                    )
+                    return auth_token, expiry_ms / 1000
+
+                self.base_conf.update(
+                    {
+                        "security.protocol": "SASL_SSL",
+                        "sasl.mechanisms": "OAUTHBEARER",
+                        "oauth_cb": oauth_cb,
+                    }
+                )
+        else:
+            self.base_conf["security.protocol"] = "PLAINTEXT"
 
         # Producer Configuration
-        self.producer_conf = {
-            "bootstrap.servers": settings.KAFKA_BROKER,
-            "client.id": settings.MICROSERVICE_CLIENTID,
-            "log_level": settings.LOG_LEVEL,
-        }
-
-        # SSL Configuration
-        if settings.KAFKA_SSL:
-            self.producer_conf.update(
-                {
-                    "security.protocol": "SASL_SSL",
-                    "sasl.mechanisms": "OAUTHBEARER",
-                    "oauth_cb": oauth_cb,
-                }
-            )
-        else:
-            self.producer_conf["security.protocol"] = "PLAINTEXT"
+        self.producer_conf = self.base_conf.copy()
+        self.producer_conf.update(
+            {
+                "log_level": settings.LOG_LEVEL,
+            }
+        )
 
         # Consumer Configuration
-        self.consumer_conf = {
-            "bootstrap.servers": settings.KAFKA_BROKER,
-            "client.id": settings.MICROSERVICE_CLIENTID,
-            "group.id": settings.MICROSERVICE_GROUPID,
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": True,
-        }
+        self.consumer_conf = self.base_conf.copy()
+        self.consumer_conf.update(
+            {
+                "group.id": settings.MICROSERVICE_GROUPID,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": True,
+            }
+        )
 
-        # SSL Configuration for Consumer
-        if settings.KAFKA_SSL:
-            self.consumer_conf.update(
-                {
-                    "security.protocol": "SASL_SSL",
-                    "sasl.mechanisms": "OAUTHBEARER",
-                    "oauth_cb": oauth_cb,
-                }
-            )
-        else:
-            self.consumer_conf["security.protocol"] = "PLAINTEXT"
-
-        # Initialize Producers and Consumers
+        # Initialize clients
         self.producer = None
         self.consumer = None
         self.admin_client = None
 
         self._initialize_clients()
+
+    # def __init__(self):
+    #     # Initialize monitoring service
+    #     self.monitor = KafkaMonitorService()
+
+    #     # OAuth callback for AWS MSK authentication
+    #     def oauth_cb(oauth_config):
+    #         auth_token, expiry_ms = MSKAuthTokenProvider.generate_auth_token(
+    #             settings.AWS_REGION
+    #         )
+    #         return auth_token, expiry_ms / 1000
+
+    #     # Producer Configuration
+    #     self.producer_conf = {
+    #         "bootstrap.servers": settings.KAFKA_BROKER,
+    #         "client.id": settings.MICROSERVICE_CLIENTID,
+    #         "log_level": settings.LOG_LEVEL,
+    #     }
+
+    #     # SSL Configuration
+    #     if settings.KAFKA_SSL:
+    #         self.producer_conf.update(
+    #             {
+    #                 "security.protocol": "SASL_SSL",
+    #                 "sasl.mechanisms": "OAUTHBEARER",
+    #                 "oauth_cb": oauth_cb,
+    #             }
+    #         )
+    #     else:
+    #         self.producer_conf["security.protocol"] = "PLAINTEXT"
+
+    #     # Consumer Configuration
+    #     self.consumer_conf = {
+    #         "bootstrap.servers": settings.KAFKA_BROKER,
+    #         "client.id": settings.MICROSERVICE_CLIENTID,
+    #         "group.id": settings.MICROSERVICE_GROUPID,
+    #         "auto.offset.reset": "earliest",
+    #         "enable.auto.commit": True,
+    #     }
+
+    #     # SSL Configuration for Consumer
+    #     if settings.KAFKA_SSL:
+    #         self.consumer_conf.update(
+    #             {
+    #                 "security.protocol": "SASL_SSL",
+    #                 "sasl.mechanisms": "OAUTHBEARER",
+    #                 "oauth_cb": oauth_cb,
+    #             }
+    #         )
+    #     else:
+    #         self.consumer_conf["security.protocol"] = "PLAINTEXT"
+
+    #     # Initialize Producers and Consumers
+    #     self.producer = None
+    #     self.consumer = None
+    #     self.admin_client = None
+
+    #     self._initialize_clients()
 
     def _initialize_clients(self):
         """Initialize Kafka clients with error handling"""
@@ -82,6 +150,8 @@ class KafkaService:
 
             # Create admin client for topic management
             self.admin_client = AdminClient({**self.producer_conf})
+
+            self.admin_client.poll(3)
 
             try:
                 cluster_metadata = self.admin_client.list_topics(timeout=10)

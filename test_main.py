@@ -21,6 +21,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+logging.basicConfig(level=logging.DEBUG)
+
 # Initialize services
 kafka_service = KafkaService()
 monitor = KafkaMonitorService()
