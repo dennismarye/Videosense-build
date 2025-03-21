@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     # Server Configuration
     SERVER_HOST: str
+    KAFKA_CA_CERT_PATH: str = "./kafka.pem"
+
     PORT: int
     SLACK_BOT_TOKEN: str
     GEMINI_KEY: str
@@ -49,7 +51,6 @@ class Settings(BaseSettings):
     )
 
 
-@lru_cache()
 def get_settings():
     """
     Cached settings retrieval to optimize performance
@@ -59,3 +60,5 @@ def get_settings():
 
 # Instantiate settings
 settings = get_settings()
+
+print(settings)

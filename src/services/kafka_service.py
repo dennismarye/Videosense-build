@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from confluent_kafka import Consumer, Producer, KafkaError, KafkaException
 from confluent_kafka.admin import AdminClient, NewTopic
-
+import os
 from src.config.settings import settings
 from src.monitoring.health_check import KafkaMonitorService
 
@@ -33,12 +33,16 @@ class KafkaService:
         # Configure authentication based on settings
         if settings.KAFKA_SSL:
             if settings.KAFKA_AUTH_TYPE == "SCRAM":
+                # assert os.path.exists(settings.KAFKA_CA_CERT_PATH), "CA certificate not found!"
                 self.base_conf.update(
                     {
                         "security.protocol": "SASL_SSL",
                         "sasl.mechanism": "SCRAM-SHA-512",
                         "sasl.username": settings.KAFKA_USERNAME,
+                        # "ssl.ca.location": settings.KAFKA_CA_CERT_PATH,
                         "sasl.password": settings.KAFKA_PASSWORD,
+                        "enable.ssl.certificate.verification": "false",
+                        "log_level": 2,  # INFO log level
                     }
                 )
             elif settings.KAFKA_AUTH_TYPE == "IAM":
@@ -210,7 +214,7 @@ class KafkaService:
             logging.error(f"Error producing message: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def consume(self, topics: list, message_handler):
+    async def consume(self, topics: list, message_handler, stop_event=None):
         """
         Consume messages from specified topics with advanced error handling
         """
@@ -219,8 +223,8 @@ class KafkaService:
             self.consumer.subscribe(topics)
             logging.info(f"Subscribed to topics: {topics}")
 
-            while True:
-                msg = self.consumer.poll(1.0)
+            while stop_event is None or not stop_event.is_set():
+                msg = self.consumer.poll(0.5)
                 # logging.info("Polling for messages...")
 
                 if msg is None:
@@ -249,7 +253,11 @@ class KafkaService:
             logging.error(f"Fatal error in consume method: {e}")
             self.monitor.update_consumer_status("Failed")
         finally:
-            self.consumer.close()
+            try:
+                self.consumer.close()
+                logging.info("Consumer closed in consume method")
+            except Exception as e:
+                logging.error(f"Error closing consumer: {e}")
 
     async def close_consumer(self):
         try:

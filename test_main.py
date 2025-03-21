@@ -12,6 +12,8 @@ import asyncio
 import uvicorn
 import threading
 import os
+import signal
+import sys
 import subprocess
 
 
@@ -26,6 +28,8 @@ logging.basicConfig(level=logging.DEBUG)
 # Initialize services
 kafka_service = KafkaService()
 monitor = KafkaMonitorService()
+# Add this at the top of your file
+stop_event = threading.Event()
 
 
 # Run Kafka consumer in a thread
@@ -35,7 +39,9 @@ def run_kafka_consumer():
     try:
         loop.run_until_complete(
             kafka_service.consume(
-                topics=[settings.INPUT_TOPIC], message_handler=process_kafka_message
+                topics=[settings.INPUT_TOPIC],
+                message_handler=process_kafka_message,
+                stop_event=stop_event,  # Pass the stop event
             )
         )
     finally:
@@ -75,6 +81,11 @@ async def lifespan(app: FastAPI):
     yield
 
     logging.info("Shutting down application...")
+    # Signal the Kafka consumer thread to stop
+    stop_event.set()
+    # Wait for the thread to finish (with a timeout to prevent hanging)
+    kafka_thread.join(timeout=5)
+    # Additional cleanup
     await kafka_service.close_consumer()
     logging.info("Kafka consumer stopped.")
 
@@ -104,8 +115,16 @@ async def health_check():
         )
 
 
+def signal_handler(sig, frame):
+    print("Received shutdown signal, stopping application...")
+    stop_event.set()
+    sys.exit(0)
+
+
 if __name__ == "__main__":
     try:
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
         # Construct the gunicorn command
         cmd = [
             "gunicorn",
