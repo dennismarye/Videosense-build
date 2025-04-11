@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     KAFKA_ADMIN_CLIENT: str
     AWS_REGION: str
     WORKERS: int
+    KAFKA_USERNAME: str
+    KAFKA_PASSWORD: str
+    KAFKA_AUTH_TYPE: str = "SCRAM"
 
     # SSL and Security
     KAFKA_SSL: bool = False
@@ -36,6 +39,8 @@ class Settings(BaseSettings):
 
     # Server Configuration
     SERVER_HOST: str
+    KAFKA_CA_CERT_PATH: str = "./kafka.pem"
+
     PORT: int
     SLACK_BOT_TOKEN: str
     GEMINI_KEY: str
@@ -46,7 +51,6 @@ class Settings(BaseSettings):
     )
 
 
-@lru_cache()
 def get_settings():
     """
     Cached settings retrieval to optimize performance
@@ -56,3 +60,5 @@ def get_settings():
 
 # Instantiate settings
 settings = get_settings()
+
+print(settings)
