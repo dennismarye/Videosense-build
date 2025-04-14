@@ -41,7 +41,9 @@ class KafkaService:
                         "sasl.username": settings.KAFKA_USERNAME,
                         # "ssl.ca.location": settings.KAFKA_CA_CERT_PATH,
                         "sasl.password": settings.KAFKA_PASSWORD,
-                        "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE,
+                        "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE
+                        == "SCRAM",
+                        "log_level": 2,  # INFO log level
                     }
                 )
             elif settings.KAFKA_AUTH_TYPE == "IAM":
