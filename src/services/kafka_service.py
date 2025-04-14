@@ -39,9 +39,10 @@ class KafkaService:
                         "security.protocol": "SASL_SSL",
                         "sasl.mechanism": "SCRAM-SHA-512",
                         "sasl.username": settings.KAFKA_USERNAME,
-                        # "ssl.ca.location": settings.KAFKA_CA_CERT_PATH,
+                        "ssl.ca.location": settings.KAFKA_CA_CERT_PATH,
                         "sasl.password": settings.KAFKA_PASSWORD,
-                        "enable.ssl.certificate.verification": "false",
+                        "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE
+                        == "SCRAM",
                         "log_level": 2,  # INFO log level
                     }
                 )
