@@ -92,7 +92,7 @@ def generate_video_tags(video_file_path, data):
         data.get("data", {}).get("files", [{}])[0].get("name", "Unknown File")
     )
     video_file_link = (
-        data.get("data", {}).get("files", [{}])[0].get("cachedOriginal", "Unknown File")
+        data.get("data", {}).get("files", [{}])[0].get("original", "Unknown File")
     )
 
     try:
@@ -164,7 +164,7 @@ def generate_video_tags(video_file_path, data):
             Comedy, Entertainment & Pop Culture, Trending & Viral
         """
 
-        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name="gemini-2.0-flash")
         response = model.generate_content(
             [video_file, prompt], request_options={"timeout": 600}
         )

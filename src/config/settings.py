@@ -60,5 +60,3 @@ def get_settings():
 
 # Instantiate settings
 settings = get_settings()
-
-print(settings)

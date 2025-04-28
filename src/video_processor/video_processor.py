@@ -92,18 +92,28 @@ class VideoProcessor:
         return resized_files
 
     @staticmethod
+    def filter_videos(files):
+        """Filter out video files from the list."""
+        return [file for file in files if file.get("fileType") == "Video"]
+
+    @staticmethod
     async def process_videos(data):
         try:
             job_id = data.get("data", {}).get("jobId", "unknown")
-            files = data.get("data", {}).get("files", [])
-            compressed_files = []
+            all_files = data.get("data", {}).get("files", [])
+
+            files = VideoProcessor.filter_videos(all_files)
+
+            logging.info(f"Processing {len(files)} files for job ID: {job_id}")
 
             if not files:
                 logging.error("No files to process")
                 return {"error": "No valid files found in the data"}
 
+            compressed_files = []
+
             for file in files:
-                file_url = file.get("cachedOriginal", "")
+                file_url = file.get("original", "")
 
                 if file["fileType"] == "Video" and file_url:
                     compressed_file_path = os.path.join(
