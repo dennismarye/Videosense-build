@@ -86,14 +86,37 @@ def send_report_to_slack(
     return
 
 
+def get_first_video_file_info(data):
+    """Extract information about the first video file in the data."""
+    video_files = []
+
+    # Get all files from the data
+    files = data.get("data", {}).get("files", [])
+
+    # Filter only video files
+    for file in files:
+        if file.get("fileType") == "Video":
+            video_files.append(file)
+
+    if not video_files:
+        # No video files found
+        return "Unknown File", "Unknown Link"
+
+    # Get the first video file
+    first_video = video_files[0]
+
+    # Get the name and link
+    video_file_name = first_video.get("name", "Unknown File")
+
+    # Use original URL as the primary source
+    video_file_link = first_video.get("original", "Unknown Link")
+
+    return video_file_name, video_file_link
+
+
 def generate_video_tags(video_file_path, data):
     """Generates tags for a given video file using Google Generative AI."""
-    video_file_name = (
-        data.get("data", {}).get("files", [{}])[0].get("name", "Unknown File")
-    )
-    video_file_link = (
-        data.get("data", {}).get("files", [{}])[0].get("cachedOriginal", "Unknown File")
-    )
+    video_file_name, video_file_link = get_first_video_file_info(data)
 
     try:
         video_file = genai.upload_file(video_file_path)
@@ -164,7 +187,7 @@ def generate_video_tags(video_file_path, data):
             Comedy, Entertainment & Pop Culture, Trending & Viral
         """
 
-        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name="gemini-2.0-flash")
         response = model.generate_content(
             [video_file, prompt], request_options={"timeout": 600}
         )

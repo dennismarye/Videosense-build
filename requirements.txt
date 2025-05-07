@@ -3,6 +3,7 @@ confluent-kafka
 fastapi==0.110.0
 ffmpeg-python
 google-generativeai
+grpcio==1.67.1
 gunicorn
 Pillow
 pydantic
