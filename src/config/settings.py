@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Kafka Topic Configuration
     INPUT_TOPIC: str = "transcoding.transcode-result"
     OUTPUT_TOPIC: str = "classify.post_classify"
+    ENVIRONMENT: str
 
     # Directories
     OUTPUT_DIR: str = "compressed_videos"
