@@ -11,6 +11,22 @@ from src.monitoring.health_check import KafkaMonitorService
 from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
 
 
+# Configure logging for the entire package
+# Security: Force INFO level in production (never DEBUG)
+environment = settings.ENVIRONMENT
+log_level = logging.DEBUG if environment == "development" else logging.INFO
+
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # Add file output for production
+    filename="/var/log/app.log" if environment == "production" else None,
+)
+
+# Reduce third-party noise
+logging.getLogger("kafka").setLevel(logging.WARNING)
+
+
 class KafkaService:
     """
     Comprehensive Kafka Service with robust error handling and monitoring
@@ -33,13 +49,11 @@ class KafkaService:
         # Configure authentication based on settings
         if settings.KAFKA_SSL:
             if settings.KAFKA_AUTH_TYPE == "SCRAM":
-                # assert os.path.exists(settings.KAFKA_CA_CERT_PATH), "CA certificate not found!"
                 self.base_conf.update(
                     {
                         "security.protocol": "SASL_SSL",
                         "sasl.mechanism": "SCRAM-SHA-512",
                         "sasl.username": settings.KAFKA_USERNAME,
-                        # "ssl.ca.location": settings.KAFKA_CA_CERT_PATH,
                         "sasl.password": settings.KAFKA_PASSWORD,
                         "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE
                         == "SCRAM",
@@ -88,64 +102,6 @@ class KafkaService:
         self.admin_client = None
 
         self._initialize_clients()
-
-    # def __init__(self):
-    #     # Initialize monitoring service
-    #     self.monitor = KafkaMonitorService()
-
-    #     # OAuth callback for AWS MSK authentication
-    #     def oauth_cb(oauth_config):
-    #         auth_token, expiry_ms = MSKAuthTokenProvider.generate_auth_token(
-    #             settings.AWS_REGION
-    #         )
-    #         return auth_token, expiry_ms / 1000
-
-    #     # Producer Configuration
-    #     self.producer_conf = {
-    #         "bootstrap.servers": settings.KAFKA_BROKER,
-    #         "client.id": settings.MICROSERVICE_CLIENTID,
-    #         "log_level": settings.LOG_LEVEL,
-    #     }
-
-    #     # SSL Configuration
-    #     if settings.KAFKA_SSL:
-    #         self.producer_conf.update(
-    #             {
-    #                 "security.protocol": "SASL_SSL",
-    #                 "sasl.mechanisms": "OAUTHBEARER",
-    #                 "oauth_cb": oauth_cb,
-    #             }
-    #         )
-    #     else:
-    #         self.producer_conf["security.protocol"] = "PLAINTEXT"
-
-    #     # Consumer Configuration
-    #     self.consumer_conf = {
-    #         "bootstrap.servers": settings.KAFKA_BROKER,
-    #         "client.id": settings.MICROSERVICE_CLIENTID,
-    #         "group.id": settings.MICROSERVICE_GROUPID,
-    #         "auto.offset.reset": "earliest",
-    #         "enable.auto.commit": True,
-    #     }
-
-    #     # SSL Configuration for Consumer
-    #     if settings.KAFKA_SSL:
-    #         self.consumer_conf.update(
-    #             {
-    #                 "security.protocol": "SASL_SSL",
-    #                 "sasl.mechanisms": "OAUTHBEARER",
-    #                 "oauth_cb": oauth_cb,
-    #             }
-    #         )
-    #     else:
-    #         self.consumer_conf["security.protocol"] = "PLAINTEXT"
-
-    #     # Initialize Producers and Consumers
-    #     self.producer = None
-    #     self.consumer = None
-    #     self.admin_client = None
-
-    #     self._initialize_clients()
 
     def _initialize_clients(self):
         """Initialize Kafka clients with error handling"""
@@ -220,45 +176,51 @@ class KafkaService:
         Consume messages from specified topics with advanced error handling
         """
         try:
-            # Subscribe to topics
-            self.consumer.subscribe(topics)
-            logging.info(f"Subscribed to topics: {topics}")
-
-            while stop_event is None or not stop_event.is_set():
-                msg = self.consumer.poll(0.5)
-                # logging.info("Polling for messages...")
-
-                if msg is None:
-                    # logging.info("No message received.")
-                    continue
-
-                if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
-                        logging.info(
-                            f"Reached end of partition: {msg.topic()}[{msg.partition()}]"
-                        )
-                    else:
-                        logging.error(f"Error while consuming messages: {msg.error()}")
-                    continue
-
-                # Process message
-                try:
-                    message_data = json.loads(msg.value().decode("utf-8"))
-                    await message_handler(message_data)
-                except json.JSONDecodeError:
-                    logging.error("Failed to decode message")
-                except Exception as e:
-                    logging.error(f"Error processing message: {e}")
-
+            self._subscribe_to_topics(topics)
+            await self._consume_messages(stop_event, message_handler)
         except Exception as e:
             logging.error(f"Fatal error in consume method: {e}")
             self.monitor.update_consumer_status("Failed")
         finally:
-            try:
-                self.consumer.close()
-                logging.info("Consumer closed in consume method")
-            except Exception as e:
-                logging.error(f"Error closing consumer: {e}")
+            self._close_consumer()
+
+    def _subscribe_to_topics(self, topics):
+        self.consumer.subscribe(topics)
+        logging.info(f"Subscribed to topics: {topics}")
+
+    async def _consume_messages(self, stop_event, message_handler):
+        while stop_event is None or not stop_event.is_set():
+            msg = self.consumer.poll(0.5)
+            if msg is None:
+                continue
+
+            if msg.error():
+                self._handle_message_error(msg)
+                continue
+
+            await self._process_message(msg, message_handler)
+
+    def _handle_message_error(self, msg):
+        if msg.error().code() == KafkaError._PARTITION_EOF:
+            logging.info(f"Reached end of partition: {msg.topic()}[{msg.partition()}")
+        else:
+            logging.error(f"Error while consuming messages: {msg.error()}")
+
+    async def _process_message(self, msg, message_handler):
+        try:
+            message_data = json.loads(msg.value().decode("utf-8"))
+            await message_handler(message_data)
+        except json.JSONDecodeError:
+            logging.error("Failed to decode message")
+        except Exception as e:
+            logging.error(f"Error processing message: {e}")
+
+    def _close_consumer(self):
+        try:
+            self.consumer.close()
+            logging.info("Consumer closed in consume method")
+        except Exception as e:
+            logging.error(f"Error closing consumer: {e}")
 
     async def close_consumer(self):
         try:
