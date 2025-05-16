@@ -1,12 +1,28 @@
 import logging
 import math
 import os
+from src.config.settings import settings
+
 
 import ffmpeg
 from PIL import Image
 from src.video_processor.google_generative_ai import generate_video_tags
 
-logging.basicConfig(level=logging.DEBUG)
+
+# Configure logging for the entire package
+# Security: Force INFO level in production (never DEBUG)
+environment = settings.ENVIRONMENT
+log_level = logging.DEBUG if environment == "development" else logging.INFO
+
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # Add file output for production
+    filename="/var/log/app.log" if environment == "production" else None,
+)
+
+# Reduce third-party noise
+logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
 output_dir = "compressed_videos"  # Local directory when not in Docker
