@@ -11,14 +11,14 @@ from src.video_processor.google_generative_ai import generate_video_tags
 
 # Configure logging for the entire package
 # Security: Force INFO level in production (never DEBUG)
-environment = settings.ENVIRONMENT
+environment = settings.NODE_ENV
 log_level = logging.DEBUG if environment == "development" else logging.INFO
 
 logging.basicConfig(
     level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     # Add file output for production
-    filename="/var/log/app.log" if environment == "production" else None,
+    filename=None,
 )
 
 # Reduce third-party noise

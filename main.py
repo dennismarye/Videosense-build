@@ -19,14 +19,14 @@ import subprocess
 
 # Configure logging for the entire package
 # Security: Force INFO level in production (never DEBUG)
-environment = settings.ENVIRONMENT
+environment = settings.NODE_ENV
 log_level = logging.DEBUG if environment == "development" else logging.INFO
 
 logging.basicConfig(
     level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     # Add file output for production
-    filename="/var/log/app.log" if environment == "production" else None,
+    filename=None,
 )
 
 # Reduce third-party noise
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         # Construct the gunicorn command
         cmd = [
             "gunicorn",
-            "test_main:app",  # Confirm this matches your module and app name exactly
+            "main:app",  # Confirm this matches your module and app name exactly
             "--bind",
             f"{os.getenv('SERVER_HOST')}:{os.getenv('PORT','8000')}",  # Host and port
             "--workers",

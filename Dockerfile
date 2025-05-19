@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser test_main.py .
+COPY --chown=appuser:appuser main.py .
 
 # Switch to non-root user
 USER appuser
@@ -40,4 +40,4 @@ EXPOSE 41295
 
 # Use entrypoint for more flexible command execution
 ENTRYPOINT ["python3"]
-CMD ["test_main.py"]
+CMD ["main.py"]
