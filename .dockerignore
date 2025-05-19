@@ -1,0 +1,87 @@
+# Ignore the Dockerfile itself (if not needed in the image)
+Dockerfile
+
+# Ignore the Docker build context (for example, if you're using a multi-stage build)
+.dockerignore
+
+# Ignore Git directories and files
+.git
+.gitignore
+.gitattributes
+.github
+
+# Ignore Node.js dependencies
+node_modules
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn.lock
+
+# Ignore Python cache and virtual environments
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+*.egg-info
+*.egg
+
+# Ignore Java build directories
+target/
+*.class
+*.jar
+
+# Ignore Maven and Gradle directories
+.mvn/
+.gradle/
+
+# Ignore Ruby gem files and bundler config
+Gemfile.lock
+.bundle/
+vendor/bundle
+
+# Ignore compiled code and IDE/project files
+*.o
+*.a
+*.out
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Ignore IDE configuration files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+
+# Ignore build artifacts
+build/
+dist/
+.output/
+*.tgz
+*.zip
+
+# Ignore test result directories
+coverage/
+test-results/
+
+# Ignore various cache files
+cache/
+tmp/
+.nuxt/
+.github/
+
+Jenkinsfile-sandbox
+Jenkinsfile-prod

@@ -1,12 +1,28 @@
 import logging
 import math
 import os
+from src.config.settings import settings
+
 
 import ffmpeg
 from PIL import Image
 from src.video_processor.google_generative_ai import generate_video_tags
 
-logging.basicConfig(level=logging.DEBUG)
+
+# Configure logging for the entire package
+# Security: Force INFO level in production (never DEBUG)
+environment = settings.NODE_ENV
+log_level = logging.DEBUG if environment == "development" else logging.INFO
+
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # Add file output for production
+    filename=None,
+)
+
+# Reduce third-party noise
+logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
 output_dir = "compressed_videos"  # Local directory when not in Docker
@@ -19,7 +35,7 @@ os.makedirs(merged_output_dir, exist_ok=True)
 
 
 class VideoProcessor:
-
+    @staticmethod
     def cleanup_files(files):
         """Delete the specified files."""
         for file in files:
@@ -29,7 +45,7 @@ class VideoProcessor:
             except Exception as e:
                 logging.error(f"Error deleting file {file}: {e}")
 
-
+    @staticmethod
     async def create_image_grid(images, output_path):
         """Create a grid of images with an automatically adjusted size and save the result."""
         try:
@@ -60,14 +76,14 @@ class VideoProcessor:
             logging.error(f"Error creating image grid: {e}")
             return None
 
-
+    @staticmethod
     def calculate_grid_size(num_images):
         """Calculate the optimal grid size (columns, rows) for a given number of images."""
         columns = math.ceil(math.sqrt(num_images))  # Number of columns in the grid
         rows = math.ceil(num_images / columns)  # Number of rows in the grid
         return columns, rows
 
-
+    @staticmethod
     async def resize_images(input_files, target_size=(640, 480)):
         """Resize images to the target size and save them to the specified directory."""
         resized_files = []
@@ -91,30 +107,42 @@ class VideoProcessor:
                 logging.error(f"Error resizing image {file}: {e}")
         return resized_files
 
+    @staticmethod
+    def filter_videos(files):
+        """Filter out video files from the list."""
+        return [file for file in files if file.get("fileType") == "Video"]
 
+    @staticmethod
     async def process_videos(data):
         try:
             job_id = data.get("data", {}).get("jobId", "unknown")
-            files = data.get("data", {}).get("files", [])
-            compressed_files = []
+            all_files = data.get("data", {}).get("files", [])
+
+            files = VideoProcessor.filter_videos(all_files)
+
+            logging.info(f"Processing {len(files)} files for job ID: {job_id}")
 
             if not files:
                 logging.error("No files to process")
                 return {"error": "No valid files found in the data"}
 
+            compressed_files = []
+
             for file in files:
-                file_url = file.get("lite", "")
-                if file["fileType"] == "video" and file_url:
+                file_url = file.get("original", "")
+
+                if file["fileType"] == "Video" and file_url:
                     compressed_file_path = os.path.join(
                         output_dir, f"{file['name']}_compressed.mp4"
                     )
                     try:
                         ffmpeg.input(file_url).output(
                             compressed_file_path,
-                            vf="scale=640:-1,fps=15",
+                            vf="scale=iw:trunc(ih/2)*2,fps=15",
                             video_bitrate="400k",
                             audio_bitrate="64k",
                             vcodec="libx265",
+                            pix_fmt="yuv420p",
                         ).overwrite_output().run(quiet=True)
                         compressed_files.append(compressed_file_path)
                     except ffmpeg.Error as e:
@@ -122,7 +150,7 @@ class VideoProcessor:
                             f"Error compressing video {file['name']}: {e.stderr.decode()}"
                         )
 
-                elif file["fileType"] == "image" and file_url:
+                elif file["fileType"] == "Image" and file_url:
                     compressed_file_path = os.path.join(
                         output_dir, f"{file['name']}_compressed.jpg"
                     )
@@ -162,7 +190,9 @@ class VideoProcessor:
                         merged_output_dir, f"{job_id}_merged.mp4"
                     )
                     # Create a temporary file to list the input videos
-                    concat_file_path = os.path.join(merged_output_dir, "concat_files.txt")
+                    concat_file_path = os.path.join(
+                        merged_output_dir, "concat_files.txt"
+                    )
 
                     try:
                         # Write the list of files to a temporary text file
@@ -197,10 +227,14 @@ class VideoProcessor:
                             os.remove(concat_file_path)
                             os.remove(merged_file_path)
                 elif all(
-                    file.endswith(tuple([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"]))
+                    file.endswith(
+                        tuple([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"])
+                    )
                     for file in compressed_files
                 ):
-                    grid_output_path = os.path.join(merged_output_dir, f"{job_id}_grid.jpg")
+                    grid_output_path = os.path.join(
+                        merged_output_dir, f"{job_id}_grid.jpg"
+                    )
 
                     resized_files = await VideoProcessor.resize_images(compressed_files)
 

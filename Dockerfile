@@ -1,24 +1,43 @@
-# Dockerfile
+#Dockerfile
 FROM python:3.11-slim
 
-# Install FFmpeg for video processing
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
+# Set environment variables to improve security and performance
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONFAULTHANDLER=1
 
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    # FFmpeg for video processing
+    ffmpeg \
+    # Cleanup to reduce image size
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN useradd -m -s /bin/bash appuser
+
+# Set working directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+# Copy requirements and set proper permissions
+COPY --chown=appuser:appuser requirements.txt .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY src/ ./src/
+# Copy application code
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser main.py .
 
-COPY test_main.py .
+# Switch to non-root user
+USER appuser
 
-# Expose FastAPI port
-EXPOSE 8000
+# Expose port and define command
+EXPOSE 41295
 
-# Run the application
-CMD python3 test_main.py
+# Use entrypoint for more flexible command execution
+ENTRYPOINT ["python3"]
+CMD ["main.py"]
