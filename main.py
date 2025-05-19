@@ -135,7 +135,7 @@ if __name__ == "__main__":
         # Construct the gunicorn command
         cmd = [
             "gunicorn",
-            "test_main:app",  # Confirm this matches your module and app name exactly
+            "main:app",  # Confirm this matches your module and app name exactly
             "--bind",
             f"{os.getenv('SERVER_HOST')}:{os.getenv('PORT','8000')}",  # Host and port
             "--workers",
