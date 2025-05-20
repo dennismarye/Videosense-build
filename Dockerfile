@@ -8,16 +8,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONFAULTHANDLER=1
 
-# Install system dependencies
+# Install system dependencies and reate a non-root user
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     # FFmpeg for video processing
     ffmpeg \
     # Cleanup to reduce image size
-    && rm -rf /var/lib/apt/lists/*
-
-# Create a non-root user
-RUN useradd -m -s /bin/bash appuser
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -s /bin/bash -u 1000 appuser
 
 # Set working directory
 WORKDIR /app

@@ -115,8 +115,8 @@ class KafkaService:
             self.admin_client.poll(3)
 
             try:
-                cluster_metadata = self.admin_client.list_topics(timeout=10)
-                print(f"Broker version likely supports Kafka {cluster_metadata}")
+                cluster_metadata = self.admin_client.list_topics(timeout=10) # This is to check if the client can connect to kafka successfully.
+                print(f"gfgvhbjbj{cluster_metadata}90inbdfyg7yhdbhb") #This is to make the key useless to bad actors on the console
             except Exception as e:
                 print(f"Failed to fetch metadata: {e}")
 
@@ -226,5 +226,5 @@ class KafkaService:
         try:
             self.consumer.close()
             logging.info("Consumer is closed")
-        except:
+        except Exception:
             logging.error("Issues closing the consumer")
