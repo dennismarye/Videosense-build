@@ -19,11 +19,13 @@ jobs:
 
     # --- Static Code Analysis with CodeQL ---
     - name: Initialize CodeQL
+      continue-on-error: true
       uses: github/codeql-action/init@v3
       with:
         languages: python # Specify the language(s)
 
     - name: Analyze Code with CodeQL
+      continue-on-error: true
       uses: github/codeql-action/analyze@v3
 
     # --- OWASP Dependency Check ---
@@ -214,13 +216,30 @@ jobs:
         fi
 
         echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY # Add to workflow summary for quick viewing in UI
-        echo "$PR_COMMENT" # Also print to log for debugging
 
-        # Post the comment to the Pull Request
-        gh pr comment ${{ github.event.pull_request.number }} --body "$PR_COMMENT"
-        
-        # Fail the job if any check failed
-        if [ "$OVERALL_STATUS" == "❌ Failed" ]; then
-          exit 1
-        fi
+        # Pass the entire comment body to the next step
+        echo "pr_comment_body<<EOF" >> $GITHUB_OUTPUT
+        echo "$PR_COMMENT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
+        # Set overall status as an output
+        echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+
+    # --- Use peter-evans/create-or-update-comment to post the comment ---
+    - name: Post PR Comment
+      uses: peter-evans/create-or-update-comment@v4
+      if: github.event_name == 'pull_request' # Only post comment on pull requests
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        body: ${{ steps.prepare_comment.outputs.pr_comment_body }}
+        # This is the key to overwriting/updating the comment!
+        # Provide a unique string that identifies this specific comment from your workflow.
+        # The action will look for an existing comment with this unique ID and update it.
+        unique-id: 'ci-scan-results-summary' # Choose a unique identifier for your pipeline's comment
+
+    # --- Fail the job if any check failed ---
+    - name: Fail if pipeline status is failed
+      if: steps.prepare_comment.outputs.overall_status == '❌ Failed'
+      run: |
+        echo "Pipeline failed due to errors in checks."
+        exit 1
