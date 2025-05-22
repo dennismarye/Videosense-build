@@ -57,6 +57,7 @@ class KafkaService:
                         "sasl.password": settings.KAFKA_PASSWORD,
                         "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE
                         == "SCRAM",
+                        "ssl.ca.location": "src/config/kafka.pem",
                         "log_level": 2,  # INFO log level
                     }
                 )
@@ -115,8 +116,12 @@ class KafkaService:
             self.admin_client.poll(3)
 
             try:
-                cluster_metadata = self.admin_client.list_topics(timeout=10) # This is to check if the client can connect to kafka successfully.
-                print(f"gfgvhbjbj{cluster_metadata}90inbdfyg7yhdbhb") #This is to make the key useless to bad actors on the console
+                cluster_metadata = self.admin_client.list_topics(
+                    timeout=10
+                )  # This is to check if the client can connect to kafka successfully.
+                print(
+                    f"gfgvhbjbj{cluster_metadata}90inbdfyg7yhdbhb"
+                )  # This is to make the key useless to bad actors on the console
             except Exception as e:
                 print(f"Failed to fetch metadata: {e}")
 
