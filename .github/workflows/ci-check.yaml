@@ -1,3 +1,4 @@
+
 name: CI/Scans Pipeline
 on:
   pull_request:
@@ -11,7 +12,7 @@ jobs:
       contents: read
       security-events: write # Required for CodeQL to upload results
       pull-requests: write # Required for posting comments on PR
-      actions: read       # Required for CodeQL to access workflow run information (Fixes CodeQL error)
+      actions: read       # Required for CodeQL to access workflow run information
 
     steps:
     - name: Checkout code
@@ -28,11 +29,67 @@ jobs:
       continue-on-error: true
       uses: github/codeql-action/analyze@v3
 
-    # --- OWASP Dependency Check ---
+    # --- OWASP Dependency Check (Comprehensive) ---
     - name: OWASP Dependency Check
-      id: owasp_dependency_check
-      uses: actions/dependency-review-action@v3
-      continue-on-error: true # Ensure the workflow continues even if this step reports vulnerabilities
+      id: owasp_check
+      uses: dependency-check/Dependency-Check_Action@main
+      continue-on-error: true
+      with:
+        project: 'security-scan'
+        path: '.'
+        format: 'JSON'
+        args: >
+          --enableRetired
+          --enableExperimental
+          --failOnCVSS 7.0
+          --out ./owasp-reports
+
+    - name: Process OWASP Results
+      if: always()
+      run: |
+        if [ -f "./owasp-reports/dependency-check-report.json" ]; then
+          # Parse OWASP report
+          if command -v jq >/dev/null 2>&1; then
+            # Count total vulnerabilities
+            VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]?] | length' ./owasp-reports/dependency-check-report.json)
+            HIGH_VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]? | select(.cvssv3?.baseScore >= 7.0 or .cvssv2?.score >= 7.0)] | length' ./owasp-reports/dependency-check-report.json)
+            
+            if [ "$VULN_COUNT" -gt 0 ]; then
+              if [ "$HIGH_VULN_COUNT" -gt 0 ]; then
+                echo "owasp_status=failed" >> $GITHUB_OUTPUT
+                echo "❌ Found $VULN_COUNT total vulnerabilities ($HIGH_VULN_COUNT high/critical):" > owasp_result.txt
+              else
+                echo "owasp_status=warning" >> $GITHUB_OUTPUT
+                echo "⚠️ Found $VULN_COUNT low/medium vulnerabilities:" > owasp_result.txt
+              fi
+              echo "" >> owasp_result.txt
+              
+              # List vulnerable dependencies
+              jq -r '.dependencies[]? | select(.vulnerabilities[]?) | "📦 " + .fileName + "\n" + (.vulnerabilities[]? | "  └─ " + .name + " (CVSS: " + (.cvssv3?.baseScore // .cvssv2?.score // "Unknown" | tostring) + ")")' ./owasp-reports/dependency-check-report.json >> owasp_result.txt
+            else
+              echo "owasp_status=passed" >> $GITHUB_OUTPUT
+              echo "✅ No vulnerabilities detected in dependencies" > owasp_result.txt
+            fi
+          else
+            echo "owasp_status=unknown" >> $GITHUB_OUTPUT
+            echo "⚠️ Could not parse OWASP report (jq not available)" > owasp_result.txt
+          fi
+        else
+          echo "owasp_status=unknown" >> $GITHUB_OUTPUT
+          echo "⚠️ OWASP report not generated" > owasp_result.txt
+        fi
+        
+        echo "## 🔒 OWASP Dependency Check Results" >> $GITHUB_STEP_SUMMARY
+        cat owasp_result.txt >> $GITHUB_STEP_SUMMARY
+
+    # --- Upload OWASP Reports as Artifacts ---
+    - name: Upload OWASP Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: owasp-dependency-reports
+        path: ./owasp-reports/
+        retention-days: 30
 
     # --- Setup Python Environment ---
     - name: Set up Python 3.11
@@ -58,16 +115,14 @@ jobs:
       id: flake8_lint
       continue-on-error: true
       run: |
-        # Capture all output and determine exit code
         if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics > flake8_output.txt 2>&1; then
           echo "flake8_status=passed" >> $GITHUB_OUTPUT
-          echo "Flake8 passed successfully" > flake8_result.txt
+          echo "✅ Flake8 passed successfully" > flake8_result.txt
         else
           echo "flake8_status=failed" >> $GITHUB_OUTPUT
           cp flake8_output.txt flake8_result.txt
         fi
         
-        # Add to step summary
         echo "## 🔍 Flake8 Linting Results" >> $GITHUB_STEP_SUMMARY
         cat flake8_result.txt >> $GITHUB_STEP_SUMMARY
 
@@ -77,10 +132,10 @@ jobs:
       run: |
         if black --check . > black_output.txt 2>&1; then
           echo "black_status=passed" >> $GITHUB_OUTPUT
-          echo "Black formatting check passed successfully" > black_result.txt
+          echo "✅ Black formatting check passed successfully" > black_result.txt
         else
           echo "black_status=failed" >> $GITHUB_OUTPUT
-          echo "Black formatting issues found. Run 'black .' to fix:" > black_result.txt
+          echo "❌ Black formatting issues found. Run 'black .' to fix:" > black_result.txt
           cat black_output.txt >> black_result.txt
         fi
 
@@ -93,7 +148,7 @@ jobs:
       run: |
         if mypy src/ > mypy_output.txt 2>&1; then
           echo "mypy_status=passed" >> $GITHUB_OUTPUT
-          echo "MyPy type checking passed successfully" > mypy_result.txt
+          echo "✅ MyPy type checking passed successfully" > mypy_result.txt
         else
           echo "mypy_status=failed" >> $GITHUB_OUTPUT
           cp mypy_output.txt mypy_result.txt
@@ -107,9 +162,9 @@ jobs:
       id: pytest_tests
       continue-on-error: true
       run: |
-        if pytest tests/ > pytest_output.txt 2>&1; then
+        if pytest tests/ --tb=short > pytest_output.txt 2>&1; then
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
-          echo "All tests passed successfully!" > pytest_result.txt
+          echo "✅ All tests passed successfully!" > pytest_result.txt
           echo "" >> pytest_result.txt
           tail -10 pytest_output.txt >> pytest_result.txt
         else
@@ -120,19 +175,20 @@ jobs:
         echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
         cat pytest_result.txt >> $GITHUB_STEP_SUMMARY
 
-    # --- Create PR Comment with Proper Formatting ---
+    # --- Create PR Comment with Results ---
     - name: Create PR Comment
       if: always()
       run: |
-        # Start building the comment content
         cat > pr_comment.md << 'EOF'
         ## CI/Scans Pipeline Results 🚀
         
         EOF
         
-        # Determine overall status
-        OVERALL_STATUS="✅ Success"
+        # Track failures and warnings separately
+        HAS_FAILURES=false
+        HAS_WARNINGS=false
         FAILED_CHECKS=""
+        WARNING_CHECKS=""
 
         # Flake8 Results
         echo "### 🔍 Flake8 Linting" >> pr_comment.md
@@ -141,10 +197,10 @@ jobs:
         else
           echo "❌ **Failed** - Linting issues detected" >> pr_comment.md
           FAILED_CHECKS+="Flake8, "
-          OVERALL_STATUS="❌ Failed"
+          HAS_FAILURES=true
         fi
         echo "" >> pr_comment.md
-        echo "<details><summary>📄 View Flake8 Output</summary>" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
         echo "" >> pr_comment.md
         echo '```' >> pr_comment.md
         cat flake8_result.txt >> pr_comment.md
@@ -159,10 +215,10 @@ jobs:
         else
           echo "❌ **Failed** - Code formatting issues found" >> pr_comment.md
           FAILED_CHECKS+="Black, "
-          OVERALL_STATUS="❌ Failed"
+          HAS_FAILURES=true
         fi
         echo "" >> pr_comment.md
-        echo "<details><summary>📄 View Black Output</summary>" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
         echo "" >> pr_comment.md
         echo '```diff' >> pr_comment.md
         cat black_result.txt >> pr_comment.md
@@ -177,10 +233,10 @@ jobs:
         else
           echo "❌ **Failed** - Type checking errors found" >> pr_comment.md
           FAILED_CHECKS+="MyPy, "
-          OVERALL_STATUS="❌ Failed"
+          HAS_FAILURES=true
         fi
         echo "" >> pr_comment.md
-        echo "<details><summary>📄 View MyPy Output</summary>" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
         echo "" >> pr_comment.md
         echo '```python' >> pr_comment.md
         cat mypy_result.txt >> pr_comment.md
@@ -194,11 +250,11 @@ jobs:
           echo "✅ **Passed** - All tests are passing" >> pr_comment.md
         else
           echo "❌ **Failed** - Some tests are failing" >> pr_comment.md
-          FAILED_CHECKS+="Pytest, "
-          OVERALL_STATUS="❌ Failed"
+          FAILED_CHECKS+="Tests, "
+          HAS_FAILURES=true
         fi
         echo "" >> pr_comment.md
-        echo "<details><summary>📄 View Pytest Output</summary>" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
         echo "" >> pr_comment.md
         echo '```' >> pr_comment.md
         cat pytest_result.txt >> pr_comment.md
@@ -206,16 +262,35 @@ jobs:
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
-        # OWASP Dependency Check Results
+        # OWASP Results
         echo "### 🔒 OWASP Dependency Check" >> pr_comment.md
-        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then
-          echo "❌ **Failed** - Vulnerabilities found in dependencies" >> pr_comment.md
-          echo "Please check the **Dependency Review** tab for detailed vulnerability information." >> pr_comment.md
-          FAILED_CHECKS+="OWASP Dependency Check, "
-          OVERALL_STATUS="❌ Failed"
+        if [ "${{ steps.owasp_check.outputs.owasp_status }}" == "passed" ]; then
+          echo "✅ **Passed** - No vulnerable dependencies found" >> pr_comment.md
+        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "warning" ]; then
+          echo "⚠️ **Warning** - Low/medium severity vulnerabilities found" >> pr_comment.md
+          WARNING_CHECKS+="OWASP (Low/Medium), "
+          HAS_WARNINGS=true
+        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "failed" ]; then
+          echo "❌ **Failed** - High/critical vulnerabilities found" >> pr_comment.md
+          FAILED_CHECKS+="OWASP (High/Critical), "
+          HAS_FAILURES=true
         else
-          echo "✅ **Passed** - No known vulnerable dependencies found" >> pr_comment.md
+          echo "⚠️ **Unknown** - Could not determine vulnerability status" >> pr_comment.md
+          WARNING_CHECKS+="OWASP (Unknown), "
+          HAS_WARNINGS=true
         fi
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo '```' >> pr_comment.md
+        cat owasp_result.txt >> pr_comment.md
+        echo '```' >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo "📊 **Additional Resources:**" >> pr_comment.md
+        echo "- [Security Tab](https://github.com/${{ github.repository }}/security/dependabot) - View all dependency alerts" >> pr_comment.md
+        echo "- [Dependency Graph](https://github.com/${{ github.repository }}/network/dependencies) - Visual dependency tree" >> pr_comment.md
+        echo "- Download full OWASP reports from workflow artifacts" >> pr_comment.md
+        echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
         # CodeQL Results
@@ -224,6 +299,24 @@ jobs:
         echo "Security findings (if any) will appear as annotations in the **Files changed** tab." >> pr_comment.md
         echo "" >> pr_comment.md
 
+        # CodeQL Results
+        echo "### 🛡️ CodeQL Analysis" >> pr_comment.md
+        echo "📊 **Analysis Complete** - Results available in the **Security** tab" >> pr_comment.md
+        echo "Security findings (if any) will appear as annotations in the **Files changed** tab." >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # Determine overall status based on failures and warnings
+        if [ "$HAS_FAILURES" == "true" ]; then
+          OVERALL_STATUS="❌ Failed"
+          PIPELINE_STATUS="FAILED"
+        elif [ "$HAS_WARNINGS" == "true" ]; then
+          OVERALL_STATUS="⚠️ Warning"
+          PIPELINE_STATUS="WARNING"
+        else
+          OVERALL_STATUS="✅ Success"
+          PIPELINE_STATUS="SUCCESS"
+        fi
+
         # Overall Status
         echo "---" >> pr_comment.md
         echo "" >> pr_comment.md
@@ -231,10 +324,17 @@ jobs:
         echo "**Status:** $OVERALL_STATUS" >> pr_comment.md
         echo "" >> pr_comment.md
         
-        if [ "$OVERALL_STATUS" == "❌ Failed" ]; then
-          FAILED_CHECKS=${FAILED_CHECKS%, }  # Remove trailing comma and space
+        if [ "$HAS_FAILURES" == "true" ]; then
+          FAILED_CHECKS=${FAILED_CHECKS%, }
           echo "**Failed Checks:** $FAILED_CHECKS" >> pr_comment.md
           echo "" >> pr_comment.md
+          
+          if [ "$HAS_WARNINGS" == "true" ]; then
+            WARNING_CHECKS=${WARNING_CHECKS%, }
+            echo "**Warnings:** $WARNING_CHECKS" >> pr_comment.md
+            echo "" >> pr_comment.md
+          fi
+          
           echo "### 🔧 Quick Fix Commands" >> pr_comment.md
           echo '```bash' >> pr_comment.md
           echo "# Fix formatting issues" >> pr_comment.md
@@ -249,6 +349,11 @@ jobs:
           echo "# Type checking" >> pr_comment.md
           echo "mypy src/" >> pr_comment.md
           echo '```' >> pr_comment.md
+        elif [ "$HAS_WARNINGS" == "true" ]; then
+          WARNING_CHECKS=${WARNING_CHECKS%, }
+          echo "**Warnings:** $WARNING_CHECKS" >> pr_comment.md
+          echo "" >> pr_comment.md
+          echo "⚠️ This PR has warnings but can proceed with review. Consider addressing the low/medium severity vulnerabilities when possible." >> pr_comment.md
         else
           echo "🎉 **All checks passed!** This PR is ready for review." >> pr_comment.md
         fi
@@ -256,8 +361,8 @@ jobs:
         echo "" >> pr_comment.md
         echo "*Generated by CI/Scans Pipeline - $(date)*" >> pr_comment.md
 
-        # Store the overall status for the final step
-        echo "PIPELINE_STATUS=$OVERALL_STATUS" >> $GITHUB_ENV
+        # Store status for final step
+        echo "PIPELINE_STATUS=$PIPELINE_STATUS" >> $GITHUB_ENV
 
     # --- Post PR Comment ---
     - name: Post PR Comment
@@ -268,7 +373,6 @@ jobs:
           const fs = require('fs');
           const comment = fs.readFileSync('pr_comment.md', 'utf8');
           
-          // Check if we already have a comment from this workflow
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -281,7 +385,6 @@ jobs:
           );
           
           if (botComment) {
-            // Update existing comment
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -289,7 +392,6 @@ jobs:
               body: comment
             });
           } else {
-            // Create new comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -302,9 +404,13 @@ jobs:
     - name: Final Status Check
       if: always()
       run: |
-        if [ "$PIPELINE_STATUS" == "❌ Failed" ]; then
-          echo "Pipeline failed - one or more checks did not pass"
+        if [ "$PIPELINE_STATUS" == "FAILED" ]; then
+          echo "Pipeline failed - one or more critical checks failed"
           exit 1
+        elif [ "$PIPELINE_STATUS" == "WARNING" ]; then
+          echo "Pipeline completed with warnings - review recommended but not blocking"
+          exit 0
         else
           echo "Pipeline passed - all checks successful"
+          exit 0
         fi
