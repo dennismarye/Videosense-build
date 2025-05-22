@@ -59,7 +59,7 @@ jobs:
       continue-on-error: true
       run: |
         # Capture all output and determine exit code
-        FLAKE8_FULL_OUTPUT=$(flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1)
+        FLAKE8_FULL_OUTPUT=$(flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true)
         FLAKE8_EXIT_CODE=$?
         
         # Output the full log to GITHUB_STEP_SUMMARY
@@ -84,7 +84,7 @@ jobs:
       id: black_format
       continue-on-error: true
       run: |
-        BLACK_FULL_OUTPUT=$(black --check . 2>&1)
+        BLACK_FULL_OUTPUT=$(black --check . 2>&1 || true)
         BLACK_EXIT_CODE=$?
 
         echo "## 💅 Black Formatting Results" >> $GITHUB_STEP_SUMMARY
@@ -107,7 +107,7 @@ jobs:
       id: mypy_type_check
       continue-on-error: true
       run: |
-        MYPY_FULL_OUTPUT=$(mypy src/ 2>&1)
+        MYPY_FULL_OUTPUT=$(mypy src/ 2>&1 || true)
         MYPY_EXIT_CODE=$?
 
         echo "## 📝 MyPy Type Checking Results" >> $GITHUB_STEP_SUMMARY
@@ -131,7 +131,7 @@ jobs:
       id: pytest_tests
       continue-on-error: true
       run: |
-        PYTEST_FULL_OUTPUT=$(pytest tests/ 2>&1)
+        PYTEST_FULL_OUTPUT=$(pytest tests/ 2>&1 || true)
         PYTEST_EXIT_CODE=$?
 
         echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
@@ -153,78 +153,78 @@ jobs:
     # --- Final Status Check and Prepare PR Comment ---
     - name: Determine Overall Status and Prepare PR Comment
       id: prepare_comment
-      if: always()
+      if: always() # Ensure this step runs even if previous steps fail
       run: |
-        PR_COMMENT="## CI/Scans Pipeline Results 🚀\n\n"
-        # Add a unique marker to the comment body that we can search for later
+        # It's better to construct the entire comment string in JavaScript for robustness,
+        # but if we must do it in shell, variables must be robustly quoted.
+
+        # Correctly define the marker
         COMMENT_MARKER=""
-        PR_COMMENT+="$COMMENT_MARKER\n\n" # Add the marker at the beginning or end
+        
+        # Build the PR comment string. Use double quotes and careful string concatenation.
+        # This is where the magic happens: the ${{...}} expressions are interpolated
+        # by GitHub Actions before the shell script runs.
+        # The key is to ensure the interpolated strings are treated as single arguments
+        # and don't break the shell's parsing.
+        PR_COMMENT=$(cat <<EOMARKDOWN
+        ## CI/Scans Pipeline Results 🚀
+
+        ${COMMENT_MARKER}
+
+        ### 🔍 Flake8 Linting: ${{ steps.flake8_lint.outputs.flake8_status == 'passed' && '✅ Passed' || '❌ Failed' }}
+        \`\`\`
+        ${{ steps.flake8_lint.outputs.flake8_output }}
+        \`\`\`
+
+        ### 💅 Black Formatting: ${{ steps.black_format.outputs.black_status == 'passed' && '✅ Passed' || '❌ Failed' }}
+        \`\`\`
+        ${{ steps.black_format.outputs.black_output }}
+        \`\`\`
+
+        ### 📝 MyPy Type Checking: ${{ steps.mypy_type_check.outputs.mypy_status == 'passed' && '✅ Passed' || '❌ Failed' }}
+        \`\`\`
+        ${{ steps.mypy_type_check.outputs.mypy_output }}
+        \`\`\`
+
+        ### 🧪 Pytest: ${{ steps.pytest_tests.outputs.pytest_status == 'passed' && '✅ Passed' || '❌ Failed' }}
+        \`\`\`
+        ${{ steps.pytest_tests.outputs.pytest_output }}
+        \`\`\`
+
+        ### 🔒 OWASP Dependency Check: ${{ steps.owasp_dependency_check.outcome == 'failure' && '❌ Failed (Vulnerabilities Found)' || '✅ Passed' }}
+        ${{ steps.owasp_dependency_check.outcome == 'failure' && 'Please check the **Dependency Review** tab and the workflow run summary for details on detected vulnerabilities.' || 'No known vulnerable dependencies found.' }}
+
+        ### 🛡️ CodeQL Analysis:
+        Results are available in the **Security** tab of your repository and as file annotations in the **Files changed** tab of this PR.
+
+        ---
+        **Overall Pipeline Status:**
+        EOMARKDOWN
+        )
 
         OVERALL_STATUS="✅ Success"
         FAILED_CHECKS=""
 
-        # Flake8
-        PR_COMMENT+="### 🔍 Flake8 Linting: ${{ steps.flake8_lint.outputs.flake8_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-        PR_COMMENT+="```\n${{ steps.flake8_lint.outputs.flake8_output }}\n```\n\n"
-        if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "failed" ]; then
-          FAILED_CHECKS+="Flake8,"
-          OVERALL_STATUS="❌ Failed"
-        fi
+        if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "failed" ]; then FAILED_CHECKS+="Flake8,"; OVERALL_STATUS="❌ Failed"; fi
+        if [ "${{ steps.black_format.outputs.black_status }}" == "failed" ]; then FAILED_CHECKS+="Black,"; OVERALL_STATUS="❌ Failed"; fi
+        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "failed" ]; then FAILED_CHECKS+="MyPy,"; OVERALL_STATUS="❌ Failed"; fi
+        if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "failed" ]; then FAILED_CHECKS+="Pytest,"; OVERALL_STATUS="❌ Failed"; fi
+        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then FAILED_CHECKS+="OWASP Dependency Check,"; OVERALL_STATUS="❌ Failed"; fi
 
-        # Black
-        PR_COMMENT+="### 💅 Black Formatting: ${{ steps.black_format.outputs.black_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-        PR_COMMENT+="```\n${{ steps.black_format.outputs.black_output }}\n```\n\n"
-        if [ "${{ steps.black_format.outputs.black_status }}" == "failed" ]; then
-          FAILED_CHECKS+="Black,"
-          OVERALL_STATUS="❌ Failed"
-        fi
-
-        # MyPy
-        PR_COMMENT+="### 📝 MyPy Type Checking: ${{ steps.mypy_type_check.outputs.mypy_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-        PR_COMMENT+="```\n${{ steps.mypy_type_check.outputs.mypy_output }}\n```\n\n"
-        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "failed" ]; then
-          FAILED_CHECKS+="MyPy,"
-          OVERALL_STATUS="❌ Failed"
-        fi
-
-        # Pytest
-        PR_COMMENT+="### 🧪 Pytest: ${{ steps.pytest_tests.outputs.pytest_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-        PR_COMMENT+="```\n${{ steps.pytest_tests.outputs.pytest_output }}\n```\n\n"
-        if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "failed" ]; then
-          FAILED_CHECKS+="Pytest,"
-          OVERALL_STATUS="❌ Failed"
-        fi
-
-        # OWASP Dependency Check
-        PR_COMMENT+="### 🔒 OWASP Dependency Check: "
-        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then
-          PR_COMMENT+="❌ Failed (Vulnerabilities Found)\n"
-          PR_COMMENT+="Please check the **Dependency Review** tab and the workflow run summary for details on detected vulnerabilities.\n\n"
-          FAILED_CHECKS+="OWASP Dependency Check,"
-          OVERALL_STATUS="❌ Failed"
-        else
-          PR_COMMENT+="✅ Passed\n"
-          PR_COMMENT+="No known vulnerable dependencies found.\n\n"
-        fi
-
-        # CodeQL (Note about where to find results)
-        PR_COMMENT+="### 🛡️ CodeQL Analysis:\n"
-        PR_COMMENT+="Results are available in the **Security** tab of your repository and as file annotations in the **Files changed** tab of this PR.\n\n"
-
-        PR_COMMENT+="---\n"
-        PR_COMMENT+="**Overall Pipeline Status:** ${OVERALL_STATUS}\n"
-
+        # Append overall status and failed checks
+        PR_COMMENT+="${OVERALL_STATUS}\n"
         if [ -n "$FAILED_CHECKS" ]; then
           PR_COMMENT+="**Issues found in:** ${FAILED_CHECKS%,}\n"
         fi
 
-        echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY
+        echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY # Add to workflow summary for quick viewing in UI
         
         # Pass the entire comment body and overall status as outputs
         echo "pr_comment_body<<EOF" >> $GITHUB_OUTPUT
         echo "$PR_COMMENT" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
         echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+
 
     # --- Use actions/github-script to post/update the PR comment ---
     - name: Post or Update PR Comment
@@ -274,97 +274,3 @@ jobs:
       run: |
         echo "Pipeline failed due to errors in checks."
         exit 1
-
-    # # --- Final Status Check and PR Comment ---
-    # - name: Determine Overall Status and Post PR Comment
-    #   if: always() # Ensure this step runs even if previous steps fail
-    #   env:
-    #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Explicitly pass GITHUB_TOKEN as GH_TOKEN for gh CLI
-    #   run: |
-    #     PR_COMMENT="## CI/Scans Pipeline Results 🚀\n\n"
-    #     OVERALL_STATUS="✅ Success"
-    #     FAILED_CHECKS=""
-
-    #     # Flake8
-    #     PR_COMMENT+="### 🔍 Flake8 Linting: ${{ steps.flake8_lint.outputs.flake8_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-    #     PR_COMMENT+="\`\`\`\n${{ steps.flake8_lint.outputs.flake8_output }}\n\`\`\`\n\n"
-    #     if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "failed" ]; then
-    #       FAILED_CHECKS+="Flake8,"
-    #       OVERALL_STATUS="❌ Failed"
-    #     fi
-
-    #     # Black
-    #     PR_COMMENT+="### 💅 Black Formatting: ${{ steps.black_format.outputs.black_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-    #     PR_COMMENT+="\`\`\`\n${{ steps.black_format.outputs.black_output }}\n\`\`\`\n\n"
-    #     if [ "${{ steps.black_format.outputs.black_status }}" == "failed" ]; then
-    #       FAILED_CHECKS+="Black,"
-    #       OVERALL_STATUS="❌ Failed"
-    #     fi
-
-    #     # MyPy
-    #     PR_COMMENT+="### 📝 MyPy Type Checking: ${{ steps.mypy_type_check.outputs.mypy_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-    #     PR_COMMENT+="\`\`\`\n${{ steps.mypy_type_check.outputs.mypy_output }}\n\`\`\`\n\n"
-    #     if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "failed" ]; then
-    #       FAILED_CHECKS+="MyPy,"
-    #       OVERALL_STATUS="❌ Failed"
-    #     fi
-
-    #     # Pytest
-    #     PR_COMMENT+="### 🧪 Pytest: ${{ steps.pytest_tests.outputs.pytest_status == 'passed' && '✅ Passed' || '❌ Failed' }}\n"
-    #     PR_COMMENT+="\`\`\`\n${{ steps.pytest_tests.outputs.pytest_output }}\n\`\`\`\n\n"
-    #     if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "failed" ]; then
-    #       FAILED_CHECKS+="Pytest,"
-    #       OVERALL_STATUS="❌ Failed"
-    #     fi
-
-    #     # OWASP Dependency Check
-    #     PR_COMMENT+="### 🔒 OWASP Dependency Check: "
-    #     if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then
-    #       PR_COMMENT+="❌ Failed (Vulnerabilities Found)\n"
-    #       PR_COMMENT+="Please check the **Dependency Review** tab and the workflow run summary for details on detected vulnerabilities.\n\n"
-    #       FAILED_CHECKS+="OWASP Dependency Check,"
-    #       OVERALL_STATUS="❌ Failed"
-    #     else
-    #       PR_COMMENT+="✅ Passed\n"
-    #       PR_COMMENT+="No known vulnerable dependencies found.\n\n"
-    #     fi
-
-    #     # CodeQL (Note about where to find results)
-    #     PR_COMMENT+="### 🛡️ CodeQL Analysis:\n"
-    #     PR_COMMENT+="Results are available in the **Security** tab of your repository and as file annotations in the **Files changed** tab of this PR.\n\n"
-
-    #     PR_COMMENT+="---\n"
-    #     PR_COMMENT+="**Overall Pipeline Status:** ${OVERALL_STATUS}\n"
-
-    #     if [ -n "$FAILED_CHECKS" ]; then
-    #       PR_COMMENT+="**Issues found in:** ${FAILED_CHECKS%,}\n"
-    #     fi
-
-    #     echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY # Add to workflow summary for quick viewing in UI
-
-    #     # Pass the entire comment body to the next step
-    #     echo "pr_comment_body<<EOF" >> $GITHUB_OUTPUT
-    #     echo "$PR_COMMENT" >> $GITHUB_OUTPUT
-    #     echo "EOF" >> $GITHUB_OUTPUT
-
-    #     # Set overall status as an output
-    #     echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
-
-    # # --- Use peter-evans/create-or-update-comment to post the comment ---
-    # - name: Post PR Comment
-    #   uses: peter-evans/create-or-update-comment@v4
-    #   if: github.event_name == 'pull_request' # Only post comment on pull requests
-    #   with:
-    #     issue-number: ${{ github.event.pull_request.number }}
-    #     body: ${{ steps.prepare_comment.outputs.pr_comment_body }}
-    #     # This is the key to overwriting/updating the comment!
-    #     # Provide a unique string that identifies this specific comment from your workflow.
-    #     # The action will look for an existing comment with this unique ID and update it.
-    #     unique-id: 'ci-scan-results-summary' # Choose a unique identifier for your pipeline's comment
-
-    # # --- Fail the job if any check failed ---
-    # - name: Fail if pipeline status is failed
-    #   if: steps.prepare_comment.outputs.overall_status == '❌ Failed'
-    #   run: |
-    #     echo "Pipeline failed due to errors in checks."
-    #     exit 1
