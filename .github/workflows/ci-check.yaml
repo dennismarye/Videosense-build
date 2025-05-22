@@ -1,4 +1,3 @@
-
 name: CI/Scans Pipeline
 on:
   pull_request:
@@ -38,21 +37,25 @@ jobs:
         project: 'security-scan'
         path: '.'
         format: 'JSON'
-        args: >
-          --enableRetired
-          --enableExperimental
-          --failOnCVSS 7.0
-          --out ./owasp-reports
+        out: './owasp-reports'
+        args: '--enableRetired --enableExperimental --failOnCVSS 7.0'
 
     - name: Process OWASP Results
       if: always()
       run: |
+        echo "Processing OWASP Dependency Check results..."
+        
         if [ -f "./owasp-reports/dependency-check-report.json" ]; then
+          echo "✅ OWASP report found, parsing results..."
+          
           # Parse OWASP report
           if command -v jq >/dev/null 2>&1; then
             # Count total vulnerabilities
             VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]?] | length' ./owasp-reports/dependency-check-report.json)
             HIGH_VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]? | select(.cvssv3?.baseScore >= 7.0 or .cvssv2?.score >= 7.0)] | length' ./owasp-reports/dependency-check-report.json)
+            
+            echo "Found $VULN_COUNT total vulnerabilities"
+            echo "Found $HIGH_VULN_COUNT high/critical vulnerabilities"
             
             if [ "$VULN_COUNT" -gt 0 ]; then
               if [ "$HIGH_VULN_COUNT" -gt 0 ]; then
@@ -71,16 +74,17 @@ jobs:
               echo "✅ No vulnerabilities detected in dependencies" > owasp_result.txt
             fi
           else
+            echo "⚠️ jq not available for parsing"
             echo "owasp_status=unknown" >> $GITHUB_OUTPUT
             echo "⚠️ Could not parse OWASP report (jq not available)" > owasp_result.txt
           fi
         else
+          echo "❌ OWASP report not found at ./owasp-reports/dependency-check-report.json"
+          echo "📁 Checking available files:"
+          find . -name "*.json" -type f | head -10
           echo "owasp_status=unknown" >> $GITHUB_OUTPUT
           echo "⚠️ OWASP report not generated" > owasp_result.txt
         fi
-        
-        echo "## 🔒 OWASP Dependency Check Results" >> $GITHUB_STEP_SUMMARY
-        cat owasp_result.txt >> $GITHUB_STEP_SUMMARY
 
     # --- Upload OWASP Reports as Artifacts ---
     - name: Upload OWASP Reports
@@ -115,65 +119,61 @@ jobs:
       id: flake8_lint
       continue-on-error: true
       run: |
-        if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics > flake8_output.txt 2>&1; then
+        if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 | tee flake8_output.txt; then
+          echo "✅ Flake8 passed successfully"
           echo "flake8_status=passed" >> $GITHUB_OUTPUT
           echo "✅ Flake8 passed successfully" > flake8_result.txt
         else
+          echo "❌ Flake8 found linting issues"
           echo "flake8_status=failed" >> $GITHUB_OUTPUT
           cp flake8_output.txt flake8_result.txt
         fi
-        
-        echo "## 🔍 Flake8 Linting Results" >> $GITHUB_STEP_SUMMARY
-        cat flake8_result.txt >> $GITHUB_STEP_SUMMARY
 
     - name: Check formatting with Black
       id: black_format
       continue-on-error: true
       run: |
-        if black --check . > black_output.txt 2>&1; then
+        if black --check . 2>&1 | tee black_output.txt; then
+          echo "✅ Black formatting check passed successfully"
           echo "black_status=passed" >> $GITHUB_OUTPUT
           echo "✅ Black formatting check passed successfully" > black_result.txt
         else
+          echo "❌ Black formatting issues found"
           echo "black_status=failed" >> $GITHUB_OUTPUT
           echo "❌ Black formatting issues found. Run 'black .' to fix:" > black_result.txt
           cat black_output.txt >> black_result.txt
         fi
 
-        echo "## 💅 Black Formatting Results" >> $GITHUB_STEP_SUMMARY
-        cat black_result.txt >> $GITHUB_STEP_SUMMARY
-
     - name: Type checking with Mypy
       id: mypy_type_check
       continue-on-error: true
       run: |
-        if mypy src/ > mypy_output.txt 2>&1; then
+        if mypy src/ 2>&1 | tee mypy_output.txt; then
+          echo "✅ MyPy type checking passed successfully" 
           echo "mypy_status=passed" >> $GITHUB_OUTPUT
           echo "✅ MyPy type checking passed successfully" > mypy_result.txt
         else
+          echo "❌ MyPy found type checking errors"
           echo "mypy_status=failed" >> $GITHUB_OUTPUT
           cp mypy_output.txt mypy_result.txt
         fi
-
-        echo "## 📝 MyPy Type Checking Results" >> $GITHUB_STEP_SUMMARY
-        cat mypy_result.txt >> $GITHUB_STEP_SUMMARY
 
     # --- Run Tests ---
     - name: Run Pytest
       id: pytest_tests
       continue-on-error: true
       run: |
-        if pytest tests/ --tb=short > pytest_output.txt 2>&1; then
+        if pytest tests/ --tb=short 2>&1 | tee pytest_output.txt; then
+          echo "✅ All tests passed successfully!"
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
           echo "✅ All tests passed successfully!" > pytest_result.txt
           echo "" >> pytest_result.txt
           tail -10 pytest_output.txt >> pytest_result.txt
         else
+          echo "❌ Some tests failed"
           echo "pytest_status=failed" >> $GITHUB_OUTPUT
           cp pytest_output.txt pytest_result.txt
         fi
-
-        echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
-        cat pytest_result.txt >> $GITHUB_STEP_SUMMARY
 
     # --- Create PR Comment with Results ---
     - name: Create PR Comment
