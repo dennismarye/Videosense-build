@@ -1,0 +1,208 @@
+name: CI/Scans Pipeline
+on:
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # Required for CodeQL to upload results
+      pull-requests: write # Required for posting comments on PR
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # --- Static Code Analysis with CodeQL ---
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python # Specify the language(s)
+        # Add any other CodeQL initialization options if needed
+        # For example, to enable all default queries:
+        # queries: +security-and-quality
+
+    - name: Analyze Code with CodeQL
+      uses: github/codeql-action/analyze@v2
+
+    # --- OWASP Dependency Check ---
+    - name: OWASP Dependency Check
+      id: owasp_dependency_check
+      uses: actions/dependency-review-action@v3
+      with:
+        # We want to run all checks and report findings, not fail the build immediately.
+        # The 'outcome' of this step will indicate if vulnerabilities were found.
+        fail-on-severity: none # Set to 'none' to allow the check to complete regardless of findings
+        # You can also specify a base branch to compare against for new vulnerabilities
+        # base-branch: ${{ github.base_ref }}
+      continue-on-error: true # Ensure the workflow continues even if this step reports vulnerabilities
+
+    # --- Setup Python Environment ---
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest httpx requests
+        pip install flake8 black mypy
+
+    # --- Code Quality Checks ---
+    - name: Lint with Flake8
+      id: flake8_lint
+      continue-on-error: true # Allow subsequent steps to run
+      run: |
+        echo "## 🔍 Flake8 Linting Results" >> $GITHUB_STEP_SUMMARY
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics | tee -a $GITHUB_STEP_SUMMARY
+        FLAKE8_EXIT_CODE=$?
+        echo "## 📊 Flake8 Detailed Report" >> $GITHUB_STEP_SUMMARY
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics | tee -a $GITHUB_STEP_SUMMARY
+        if [ $FLAKE8_EXIT_CODE -ne 0 ]; then
+          echo "Flake8 found issues."
+          echo "flake8_status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        else
+          echo "Flake8 passed."
+          echo "flake8_status=passed" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Check formatting with Black
+      id: black_format
+      continue-on-error: true # Allow subsequent steps to run
+      run: |
+        echo "## 💅 Black Formatting Results" >> $GITHUB_STEP_SUMMARY
+        black --check . | tee -a $GITHUB_STEP_SUMMARY
+        BLACK_EXIT_CODE=$?
+        if [ $BLACK_EXIT_CODE -ne 0 ]; then
+          echo "Black found formatting issues. Run 'black .' to fix."
+          echo "black_status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        else
+          echo "Black formatting passed."
+          echo "black_status=passed" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Type checking with Mypy
+      id: mypy_type_check
+      continue-on-error: true # Allow subsequent steps to run
+      run: |
+        echo "## 📝 MyPy Type Checking Results" >> $GITHUB_STEP_SUMMARY
+        mypy src/ | tee -a $GITHUB_STEP_SUMMARY
+        MYPY_EXIT_CODE=$?
+        if [ $MYPY_EXIT_CODE -ne 0 ]; then
+          echo "Mypy found type errors."
+          echo "mypy_status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        else
+          echo "Mypy type checking passed."
+          echo "mypy_status=passed" >> $GITHUB_OUTPUT
+        fi
+
+    # --- Run Tests ---
+    - name: Run Pytest
+      id: pytest_tests
+      continue-on-error: true # Allow subsequent steps to run
+      run: |
+        echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
+        pytest tests/ | tee -a $GITHUB_STEP_SUMMARY
+        PYTEST_EXIT_CODE=$?
+        if [ $PYTEST_EXIT_CODE -ne 0 ]; then
+          echo "Pytest found failing tests."
+          echo "pytest_status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        else
+          echo "Pytest tests passed."
+          echo "pytest_status=passed" >> $GITHUB_OUTPUT
+        fi
+
+    # --- Final Status Check and PR Comment ---
+    - name: Determine Overall Status and Post PR Comment
+      if: always() # Ensure this step runs even if previous steps fail
+      run: |
+        PR_COMMENT="## CI/Scans Pipeline Results 🚀\n\n"
+        OVERALL_STATUS="✅ Success"
+        FAILED_CHECKS=""
+
+        # Check status of each step using their output
+        if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "failed" ]; then
+          PR_COMMENT+="### 🔍 Flake8 Linting: ❌ Failed\n"
+          FAILED_CHECKS+="Flake8,"
+          OVERALL_STATUS="❌ Failed"
+        else
+          PR_COMMENT+="### 🔍 Flake8 Linting: ✅ Passed\n"
+        fi
+
+        if [ "${{ steps.black_format.outputs.black_status }}" == "failed" ]; then
+          PR_COMMENT+="### 💅 Black Formatting: ❌ Failed\n"
+          FAILED_CHECKS+="Black,"
+          OVERALL_STATUS="❌ Failed"
+        else
+          PR_COMMENT+="### 💅 Black Formatting: ✅ Passed\n"
+        fi
+
+        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "failed" ]; then
+          PR_COMMENT+="### 📝 MyPy Type Checking: ❌ Failed\n"
+          FAILED_CHECKS+="MyPy,"
+          OVERALL_STATUS="❌ Failed"
+        else
+          PR_COMMENT+="### 📝 MyPy Type Checking: ✅ Passed\n"
+        fi
+
+        if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "failed" ]; then
+          PR_COMMENT+="### 🧪 Pytest: ❌ Failed\n"
+          FAILED_CHECKS+="Pytest,"
+          OVERALL_STATUS="❌ Failed"
+        else
+          PR_COMMENT+="### 🧪 Pytest: ✅ Passed\n"
+        fi
+
+        # Check OWASP Dependency Check status
+        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then
+          PR_COMMENT+="### 🔒 OWASP Dependency Check: ❌ Failed (Vulnerabilities Found)\n"
+          FAILED_CHECKS+="OWASP Dependency Check,"
+          OVERALL_STATUS="❌ Failed"
+        else
+          PR_COMMENT+="### 🔒 OWASP Dependency Check: ✅ Passed\n"
+        fi
+
+        # CodeQL results are automatically reported in the "Security" tab and
+        # can also generate annotations directly on the files in the "Files changed" tab.
+        # You can add a note about CodeQL results here if desired.
+        PR_COMMENT+="### 🛡️ CodeQL Analysis: Results available in Security tab and as file annotations.\n"
+
+        PR_COMMENT+="\n---\n"
+        PR_COMMENT+="**Overall Pipeline Status:** ${OVERALL_STATUS}\n"
+
+        if [ -n "$FAILED_CHECKS" ]; then
+          PR_COMMENT+="**Issues found in:** ${FAILED_CHECKS%,}\n"
+        fi
+
+        echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY # Add to workflow summary
+        echo "$PR_COMMENT"
+
+        # Post the comment to the Pull Request
+        # This uses the GitHub CLI. It needs the GITHUB_TOKEN permissions.
+        # Ensure 'pull-requests: write' permission is set for the job.
+        if [ -n "$GITHUB_TOKEN" ]; then
+          gh pr comment ${{ github.event.pull_request.number }} --body "$PR_COMMENT"
+        else
+          echo "GITHUB_TOKEN is not available. Cannot post PR comment."
+        fi
+
+        # Fail the job if any check failed
+        if [ "$OVERALL_STATUS" == "❌ Failed" ]; then
+          exit 1
+        fi
+
