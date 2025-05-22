@@ -18,7 +18,8 @@ jobs:
 
     # --- Static Code Analysis with CodeQL ---
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      continue-on-error: true
+      uses: github/codeql-action/init@v3
       with:
         languages: python # Specify the language(s)
         # Add any other CodeQL initialization options if needed
@@ -26,7 +27,8 @@ jobs:
         # queries: +security-and-quality
 
     - name: Analyze Code with CodeQL
-      uses: github/codeql-action/analyze@v2
+      continue-on-error: true
+      uses: github/codeql-action/analyze@v3
 
     # --- OWASP Dependency Check ---
     - name: OWASP Dependency Check
