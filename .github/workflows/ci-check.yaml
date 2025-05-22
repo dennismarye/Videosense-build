@@ -59,218 +59,252 @@ jobs:
       continue-on-error: true
       run: |
         # Capture all output and determine exit code
-        FLAKE8_FULL_OUTPUT=$(flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true)
-        FLAKE8_EXIT_CODE=$?
-        
-        # Output the full log to GITHUB_STEP_SUMMARY
-        echo "## 🔍 Flake8 Linting Results" >> $GITHUB_STEP_SUMMARY
-        echo "$FLAKE8_FULL_OUTPUT" | tee -a $GITHUB_STEP_SUMMARY
-
-        # Pass the full output to a step output variable for the PR comment
-        echo "flake8_output<<EOF" >> $GITHUB_OUTPUT
-        echo "$FLAKE8_FULL_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-        if [ $FLAKE8_EXIT_CODE -ne 0 ]; then
-          echo "Flake8 found issues."
-          echo "flake8_status=failed" >> $GITHUB_OUTPUT
-          exit 1
-        else
-          echo "Flake8 passed."
+        if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics > flake8_output.txt 2>&1; then
           echo "flake8_status=passed" >> $GITHUB_OUTPUT
+          echo "Flake8 passed successfully" > flake8_result.txt
+        else
+          echo "flake8_status=failed" >> $GITHUB_OUTPUT
+          cp flake8_output.txt flake8_result.txt
         fi
+        
+        # Add to step summary
+        echo "## 🔍 Flake8 Linting Results" >> $GITHUB_STEP_SUMMARY
+        cat flake8_result.txt >> $GITHUB_STEP_SUMMARY
 
     - name: Check formatting with Black
       id: black_format
       continue-on-error: true
       run: |
-        BLACK_FULL_OUTPUT=$(black --check . 2>&1 || true)
-        BLACK_EXIT_CODE=$?
+        if black --check . > black_output.txt 2>&1; then
+          echo "black_status=passed" >> $GITHUB_OUTPUT
+          echo "Black formatting check passed successfully" > black_result.txt
+        else
+          echo "black_status=failed" >> $GITHUB_OUTPUT
+          echo "Black formatting issues found. Run 'black .' to fix:" > black_result.txt
+          cat black_output.txt >> black_result.txt
+        fi
 
         echo "## 💅 Black Formatting Results" >> $GITHUB_STEP_SUMMARY
-        echo "$BLACK_FULL_OUTPUT" | tee -a $GITHUB_STEP_SUMMARY
-
-        echo "black_output<<EOF" >> $GITHUB_OUTPUT
-        echo "$BLACK_FULL_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-        if [ $BLACK_EXIT_CODE -ne 0 ]; then
-          echo "Black found formatting issues. Run 'black .' to fix."
-          echo "black_status=failed" >> $GITHUB_OUTPUT
-          exit 1
-        else
-          echo "Black formatting passed."
-          echo "black_status=passed" >> $GITHUB_OUTPUT
-        fi
+        cat black_result.txt >> $GITHUB_STEP_SUMMARY
 
     - name: Type checking with Mypy
       id: mypy_type_check
       continue-on-error: true
       run: |
-        MYPY_FULL_OUTPUT=$(mypy src/ 2>&1 || true)
-        MYPY_EXIT_CODE=$?
+        if mypy src/ > mypy_output.txt 2>&1; then
+          echo "mypy_status=passed" >> $GITHUB_OUTPUT
+          echo "MyPy type checking passed successfully" > mypy_result.txt
+        else
+          echo "mypy_status=failed" >> $GITHUB_OUTPUT
+          cp mypy_output.txt mypy_result.txt
+        fi
 
         echo "## 📝 MyPy Type Checking Results" >> $GITHUB_STEP_SUMMARY
-        echo "$MYPY_FULL_OUTPUT" | tee -a $GITHUB_STEP_SUMMARY
-
-        echo "mypy_output<<EOF" >> $GITHUB_OUTPUT
-        echo "$MYPY_FULL_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-        if [ $MYPY_EXIT_CODE -ne 0 ]; then
-          echo "Mypy found type errors."
-          echo "mypy_status=failed" >> $GITHUB_OUTPUT
-          exit 1
-        else
-          echo "Mypy type checking passed."
-          echo "mypy_status=passed" >> $GITHUB_OUTPUT
-        fi
+        cat mypy_result.txt >> $GITHUB_STEP_SUMMARY
 
     # --- Run Tests ---
     - name: Run Pytest
       id: pytest_tests
       continue-on-error: true
       run: |
-        PYTEST_FULL_OUTPUT=$(pytest tests/ 2>&1 || true)
-        PYTEST_EXIT_CODE=$?
-
-        echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
-        echo "$PYTEST_FULL_OUTPUT" | tee -a $GITHUB_STEP_SUMMARY
-
-        echo "pytest_output<<EOF" >> $GITHUB_OUTPUT
-        echo "$PYTEST_FULL_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-        if [ $PYTEST_EXIT_CODE -ne 0 ]; then
-          echo "Pytest found failing tests."
-          echo "pytest_status=failed" >> $GITHUB_OUTPUT
-          exit 1
-        else
-          echo "Pytest tests passed."
+        if pytest tests/ > pytest_output.txt 2>&1; then
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
+          echo "All tests passed successfully!" > pytest_result.txt
+          echo "" >> pytest_result.txt
+          tail -10 pytest_output.txt >> pytest_result.txt
+        else
+          echo "pytest_status=failed" >> $GITHUB_OUTPUT
+          cp pytest_output.txt pytest_result.txt
         fi
 
-    # --- Final Status Check and Prepare PR Comment ---
-    - name: Determine Overall Status and Prepare PR Comment
-      id: prepare_comment
-      if: always() # Ensure this step runs even if previous steps fail
+        echo "## 🧪 Pytest Results" >> $GITHUB_STEP_SUMMARY
+        cat pytest_result.txt >> $GITHUB_STEP_SUMMARY
+
+    # --- Create PR Comment with Proper Formatting ---
+    - name: Create PR Comment
+      if: always()
       run: |
-        # It's better to construct the entire comment string in JavaScript for robustness,
-        # but if we must do it in shell, variables must be robustly quoted.
-
-        # Correctly define the marker
-        COMMENT_MARKER=""
-        
-        # Build the PR comment string. Use double quotes and careful string concatenation.
-        # This is where the magic happens: the ${{...}} expressions are interpolated
-        # by GitHub Actions before the shell script runs.
-        # The key is to ensure the interpolated strings are treated as single arguments
-        # and don't break the shell's parsing.
-        PR_COMMENT=$(cat <<EOMARKDOWN
+        # Start building the comment content
+        cat > pr_comment.md << 'EOF'
         ## CI/Scans Pipeline Results 🚀
-
-        ${COMMENT_MARKER}
-
-        ### 🔍 Flake8 Linting: ${{ steps.flake8_lint.outputs.flake8_status == 'passed' && '✅ Passed' || '❌ Failed' }}
-        \`\`\`
-        ${{ steps.flake8_lint.outputs.flake8_output }}
-        \`\`\`
-
-        ### 💅 Black Formatting: ${{ steps.black_format.outputs.black_status == 'passed' && '✅ Passed' || '❌ Failed' }}
-        \`\`\`
-        ${{ steps.black_format.outputs.black_output }}
-        \`\`\`
-
-        ### 📝 MyPy Type Checking: ${{ steps.mypy_type_check.outputs.mypy_status == 'passed' && '✅ Passed' || '❌ Failed' }}
-        \`\`\`
-        ${{ steps.mypy_type_check.outputs.mypy_output }}
-        \`\`\`
-
-        ### 🧪 Pytest: ${{ steps.pytest_tests.outputs.pytest_status == 'passed' && '✅ Passed' || '❌ Failed' }}
-        \`\`\`
-        ${{ steps.pytest_tests.outputs.pytest_output }}
-        \`\`\`
-
-        ### 🔒 OWASP Dependency Check: ${{ steps.owasp_dependency_check.outcome == 'failure' && '❌ Failed (Vulnerabilities Found)' || '✅ Passed' }}
-        ${{ steps.owasp_dependency_check.outcome == 'failure' && 'Please check the **Dependency Review** tab and the workflow run summary for details on detected vulnerabilities.' || 'No known vulnerable dependencies found.' }}
-
-        ### 🛡️ CodeQL Analysis:
-        Results are available in the **Security** tab of your repository and as file annotations in the **Files changed** tab of this PR.
-
-        ---
-        **Overall Pipeline Status:**
-        EOMARKDOWN
-        )
-
+        
+        EOF
+        
+        # Determine overall status
         OVERALL_STATUS="✅ Success"
         FAILED_CHECKS=""
 
-        if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "failed" ]; then FAILED_CHECKS+="Flake8,"; OVERALL_STATUS="❌ Failed"; fi
-        if [ "${{ steps.black_format.outputs.black_status }}" == "failed" ]; then FAILED_CHECKS+="Black,"; OVERALL_STATUS="❌ Failed"; fi
-        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "failed" ]; then FAILED_CHECKS+="MyPy,"; OVERALL_STATUS="❌ Failed"; fi
-        if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "failed" ]; then FAILED_CHECKS+="Pytest,"; OVERALL_STATUS="❌ Failed"; fi
-        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then FAILED_CHECKS+="OWASP Dependency Check,"; OVERALL_STATUS="❌ Failed"; fi
-
-        # Append overall status and failed checks
-        PR_COMMENT+="${OVERALL_STATUS}\n"
-        if [ -n "$FAILED_CHECKS" ]; then
-          PR_COMMENT+="**Issues found in:** ${FAILED_CHECKS%,}\n"
+        # Flake8 Results
+        echo "### 🔍 Flake8 Linting" >> pr_comment.md
+        if [ "${{ steps.flake8_lint.outputs.flake8_status }}" == "passed" ]; then
+          echo "✅ **Passed** - No critical linting issues found" >> pr_comment.md
+        else
+          echo "❌ **Failed** - Linting issues detected" >> pr_comment.md
+          FAILED_CHECKS+="Flake8, "
+          OVERALL_STATUS="❌ Failed"
         fi
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View Flake8 Output</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo '```' >> pr_comment.md
+        cat flake8_result.txt >> pr_comment.md
+        echo '```' >> pr_comment.md
+        echo "</details>" >> pr_comment.md
+        echo "" >> pr_comment.md
 
-        echo "$PR_COMMENT" >> $GITHUB_STEP_SUMMARY # Add to workflow summary for quick viewing in UI
+        # Black Results
+        echo "### 💅 Black Formatting" >> pr_comment.md
+        if [ "${{ steps.black_format.outputs.black_status }}" == "passed" ]; then
+          echo "✅ **Passed** - Code formatting is correct" >> pr_comment.md
+        else
+          echo "❌ **Failed** - Code formatting issues found" >> pr_comment.md
+          FAILED_CHECKS+="Black, "
+          OVERALL_STATUS="❌ Failed"
+        fi
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View Black Output</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo '```diff' >> pr_comment.md
+        cat black_result.txt >> pr_comment.md
+        echo '```' >> pr_comment.md
+        echo "</details>" >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # MyPy Results
+        echo "### 📝 MyPy Type Checking" >> pr_comment.md
+        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "passed" ]; then
+          echo "✅ **Passed** - No type checking errors" >> pr_comment.md
+        else
+          echo "❌ **Failed** - Type checking errors found" >> pr_comment.md
+          FAILED_CHECKS+="MyPy, "
+          OVERALL_STATUS="❌ Failed"
+        fi
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View MyPy Output</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo '```python' >> pr_comment.md
+        cat mypy_result.txt >> pr_comment.md
+        echo '```' >> pr_comment.md
+        echo "</details>" >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # Pytest Results
+        echo "### 🧪 Pytest Tests" >> pr_comment.md
+        if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "passed" ]; then
+          echo "✅ **Passed** - All tests are passing" >> pr_comment.md
+        else
+          echo "❌ **Failed** - Some tests are failing" >> pr_comment.md
+          FAILED_CHECKS+="Pytest, "
+          OVERALL_STATUS="❌ Failed"
+        fi
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View Pytest Output</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo '```' >> pr_comment.md
+        cat pytest_result.txt >> pr_comment.md
+        echo '```' >> pr_comment.md
+        echo "</details>" >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # OWASP Dependency Check Results
+        echo "### 🔒 OWASP Dependency Check" >> pr_comment.md
+        if [ "${{ steps.owasp_dependency_check.outcome }}" == "failure" ]; then
+          echo "❌ **Failed** - Vulnerabilities found in dependencies" >> pr_comment.md
+          echo "Please check the **Dependency Review** tab for detailed vulnerability information." >> pr_comment.md
+          FAILED_CHECKS+="OWASP Dependency Check, "
+          OVERALL_STATUS="❌ Failed"
+        else
+          echo "✅ **Passed** - No known vulnerable dependencies found" >> pr_comment.md
+        fi
+        echo "" >> pr_comment.md
+
+        # CodeQL Results
+        echo "### 🛡️ CodeQL Analysis" >> pr_comment.md
+        echo "📊 **Analysis Complete** - Results available in the **Security** tab" >> pr_comment.md
+        echo "Security findings (if any) will appear as annotations in the **Files changed** tab." >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # Overall Status
+        echo "---" >> pr_comment.md
+        echo "" >> pr_comment.md
+        echo "## 📊 Overall Pipeline Status" >> pr_comment.md
+        echo "**Status:** $OVERALL_STATUS" >> pr_comment.md
+        echo "" >> pr_comment.md
         
-        # Pass the entire comment body and overall status as outputs
-        echo "pr_comment_body<<EOF" >> $GITHUB_OUTPUT
-        echo "$PR_COMMENT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+        if [ "$OVERALL_STATUS" == "❌ Failed" ]; then
+          FAILED_CHECKS=${FAILED_CHECKS%, }  # Remove trailing comma and space
+          echo "**Failed Checks:** $FAILED_CHECKS" >> pr_comment.md
+          echo "" >> pr_comment.md
+          echo "### 🔧 Quick Fix Commands" >> pr_comment.md
+          echo '```bash' >> pr_comment.md
+          echo "# Fix formatting issues" >> pr_comment.md
+          echo "black ." >> pr_comment.md
+          echo "" >> pr_comment.md
+          echo "# Run tests locally" >> pr_comment.md
+          echo "pytest tests/" >> pr_comment.md
+          echo "" >> pr_comment.md
+          echo "# Check linting" >> pr_comment.md
+          echo "flake8 ." >> pr_comment.md
+          echo "" >> pr_comment.md
+          echo "# Type checking" >> pr_comment.md
+          echo "mypy src/" >> pr_comment.md
+          echo '```' >> pr_comment.md
+        else
+          echo "🎉 **All checks passed!** This PR is ready for review." >> pr_comment.md
+        fi
+        
+        echo "" >> pr_comment.md
+        echo "*Generated by CI/Scans Pipeline - $(date)*" >> pr_comment.md
 
+        # Store the overall status for the final step
+        echo "PIPELINE_STATUS=$OVERALL_STATUS" >> $GITHUB_ENV
 
-    # --- Use actions/github-script to post/update the PR comment ---
-    - name: Post or Update PR Comment
-      uses: actions/github-script@v6 # Using v6 for actions/github-script
-      if: github.event_name == 'pull_request' # Only post comment on pull requests
+    # --- Post PR Comment ---
+    - name: Post PR Comment
+      if: always()
+      uses: actions/github-script@v7
       with:
         script: |
-          const commentBody = `${{ steps.prepare_comment.outputs.pr_comment_body }}`;
-          const issueNumber = context.issue.number;
-          const owner = context.repo.owner;
-          const repo = context.repo.repo;
-          const marker = ''; // Must match the marker in prepare_comment step
-
-          // Search for existing comment with the marker
+          const fs = require('fs');
+          const comment = fs.readFileSync('pr_comment.md', 'utf8');
+          
+          // Check if we already have a comment from this workflow
           const { data: comments } = await github.rest.issues.listComments({
-            owner,
-            repo,
-            issue_number: issueNumber,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
           });
-
-          const existingComment = comments.find(comment => comment.body.includes(marker));
-
-          if (existingComment) {
+          
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('CI/Scans Pipeline Results')
+          );
+          
+          if (botComment) {
             // Update existing comment
-            console.log(`Updating existing comment: ${existingComment.id}`);
             await github.rest.issues.updateComment({
-              owner,
-              repo,
-              comment_id: existingComment.id,
-              body: commentBody
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: comment
             });
           } else {
-            // Create a new comment
-            console.log('Creating new comment.');
+            // Create new comment
             await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              body: commentBody
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
             });
           }
-        github-token: ${{ secrets.GITHUB_TOKEN }} # Pass the GITHUB_TOKEN directly
 
-    # --- Fail the job if any check failed ---
-    - name: Fail if pipeline status is failed
-      if: steps.prepare_comment.outputs.overall_status == '❌ Failed'
+    # --- Final Status Check ---
+    - name: Final Status Check
+      if: always()
       run: |
-        echo "Pipeline failed due to errors in checks."
-        exit 1
+        if [ "$PIPELINE_STATUS" == "❌ Failed" ]; then
+          echo "Pipeline failed - one or more checks did not pass"
+          exit 1
+        else
+          echo "Pipeline passed - all checks successful"
+        fi
