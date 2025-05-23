@@ -36,7 +36,7 @@ jobs:
       with:
         project: 'security-scan'
         path: '.'
-        format: 'JSON'
+        format: 'JSON,HTML'  # Generate both JSON and HTML reports
         out: './owasp-reports'
         args: '--enableRetired --enableExperimental --failOnCVSS 7.0'
 
@@ -45,14 +45,17 @@ jobs:
       run: |
         echo "Processing OWASP Dependency Check results..."
         
+        # Initialize status as unknown
+        echo "owasp_status=unknown" >> $GITHUB_OUTPUT
+        
         if [ -f "./owasp-reports/dependency-check-report.json" ]; then
-          echo "✅ OWASP report found, parsing results..."
+          echo "✅ OWASP JSON report found, parsing results..."
           
-          # Parse OWASP report
+          # Check if jq is available
           if command -v jq >/dev/null 2>&1; then
-            # Count total vulnerabilities
-            VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]?] | length' ./owasp-reports/dependency-check-report.json)
-            HIGH_VULN_COUNT=$(jq '[.dependencies[]?.vulnerabilities[]? | select(.cvssv3?.baseScore >= 7.0 or .cvssv2?.score >= 7.0)] | length' ./owasp-reports/dependency-check-report.json)
+            # Count total vulnerabilities - handle empty arrays properly
+            VULN_COUNT=$(jq '[.dependencies[]? | select(.vulnerabilities != null) | .vulnerabilities[]] | length' ./owasp-reports/dependency-check-report.json 2>/dev/null || echo "0")
+            HIGH_VULN_COUNT=$(jq '[.dependencies[]? | select(.vulnerabilities != null) | .vulnerabilities[] | select((.cvssv3?.baseScore // 0) >= 7.0 or (.cvssv2?.score // 0) >= 7.0)] | length' ./owasp-reports/dependency-check-report.json 2>/dev/null || echo "0")
             
             echo "Found $VULN_COUNT total vulnerabilities"
             echo "Found $HIGH_VULN_COUNT high/critical vulnerabilities"
@@ -67,8 +70,8 @@ jobs:
               fi
               echo "" >> owasp_result.txt
               
-              # List vulnerable dependencies
-              jq -r '.dependencies[]? | select(.vulnerabilities[]?) | "📦 " + .fileName + "\n" + (.vulnerabilities[]? | "  └─ " + .name + " (CVSS: " + (.cvssv3?.baseScore // .cvssv2?.score // "Unknown" | tostring) + ")")' ./owasp-reports/dependency-check-report.json >> owasp_result.txt
+              # List vulnerable dependencies with better error handling
+              jq -r '.dependencies[]? | select(.vulnerabilities != null and (.vulnerabilities | length > 0)) | "📦 " + .fileName + "\n" + (.vulnerabilities[] | "  └─ " + .name + " (CVSS: " + ((.cvssv3?.baseScore // .cvssv2?.score // "Unknown") | tostring) + ")")' ./owasp-reports/dependency-check-report.json >> owasp_result.txt 2>/dev/null || echo "  └─ Error parsing vulnerability details" >> owasp_result.txt
             else
               echo "owasp_status=passed" >> $GITHUB_OUTPUT
               echo "✅ No vulnerabilities detected in dependencies" > owasp_result.txt
@@ -79,9 +82,10 @@ jobs:
             echo "⚠️ Could not parse OWASP report (jq not available)" > owasp_result.txt
           fi
         else
-          echo "❌ OWASP report not found at ./owasp-reports/dependency-check-report.json"
+          echo "❌ OWASP JSON report not found at ./owasp-reports/dependency-check-report.json"
           echo "📁 Checking available files:"
-          find . -name "*.json" -type f | head -10
+          find ./owasp-reports -name "*.json" -type f 2>/dev/null | head -10 || echo "No JSON files found"
+          find ./owasp-reports -name "*.html" -type f 2>/dev/null | head -5 || echo "No HTML files found"
           echo "owasp_status=unknown" >> $GITHUB_OUTPUT
           echo "⚠️ OWASP report not generated" > owasp_result.txt
         fi
@@ -93,7 +97,7 @@ jobs:
       with:
         name: owasp-dependency-reports
         path: ./owasp-reports/
-        retention-days: 30
+        retention-days: 7
 
     # --- Setup Python Environment ---
     - name: Set up Python 3.11
@@ -119,28 +123,49 @@ jobs:
       id: flake8_lint
       continue-on-error: true
       run: |
-        if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 | tee flake8_output.txt; then
+        # Run flake8 and capture both output and exit code
+        set +e  # Don't exit on error
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics > flake8_output.txt 2>&1
+        FLAKE8_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+        
+        # Check the actual exit code, not the tee command
+        if [ $FLAKE8_EXIT_CODE -eq 0 ]; then
           echo "✅ Flake8 passed successfully"
           echo "flake8_status=passed" >> $GITHUB_OUTPUT
           echo "✅ Flake8 passed successfully" > flake8_result.txt
+          echo "" >> flake8_result.txt
+          cat flake8_output.txt >> flake8_result.txt
         else
           echo "❌ Flake8 found linting issues"
           echo "flake8_status=failed" >> $GITHUB_OUTPUT
-          cp flake8_output.txt flake8_result.txt
+          echo "❌ Flake8 found linting issues:" > flake8_result.txt
+          echo "" >> flake8_result.txt
+          cat flake8_output.txt >> flake8_result.txt
         fi
 
     - name: Check formatting with Black
       id: black_format
       continue-on-error: true
       run: |
-        if black --check . 2>&1 | tee black_output.txt; then
+        # Run black and capture both output and exit code
+        set +e  # Don't exit on error
+        black --check . > black_output.txt 2>&1
+        BLACK_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+        
+        # Check the actual exit code
+        if [ $BLACK_EXIT_CODE -eq 0 ]; then
           echo "✅ Black formatting check passed successfully"
           echo "black_status=passed" >> $GITHUB_OUTPUT
           echo "✅ Black formatting check passed successfully" > black_result.txt
+          echo "" >> black_result.txt
+          cat black_output.txt >> black_result.txt
         else
           echo "❌ Black formatting issues found"
           echo "black_status=failed" >> $GITHUB_OUTPUT
           echo "❌ Black formatting issues found. Run 'black .' to fix:" > black_result.txt
+          echo "" >> black_result.txt
           cat black_output.txt >> black_result.txt
         fi
 
@@ -148,14 +173,25 @@ jobs:
       id: mypy_type_check
       continue-on-error: true
       run: |
-        if mypy src/ 2>&1 | tee mypy_output.txt; then
+        # Run mypy and capture both output and exit code
+        set +e  # Don't exit on error
+        mypy src/ > mypy_output.txt 2>&1
+        MYPY_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+        
+        # Check the actual exit code
+        if [ $MYPY_EXIT_CODE -eq 0 ]; then
           echo "✅ MyPy type checking passed successfully" 
           echo "mypy_status=passed" >> $GITHUB_OUTPUT
           echo "✅ MyPy type checking passed successfully" > mypy_result.txt
+          echo "" >> mypy_result.txt
+          cat mypy_output.txt >> mypy_result.txt
         else
           echo "❌ MyPy found type checking errors"
           echo "mypy_status=failed" >> $GITHUB_OUTPUT
-          cp mypy_output.txt mypy_result.txt
+          echo "❌ MyPy found type checking errors:" > mypy_result.txt
+          echo "" >> mypy_result.txt
+          cat mypy_output.txt >> mypy_result.txt
         fi
 
     # --- Run Tests ---
@@ -163,7 +199,14 @@ jobs:
       id: pytest_tests
       continue-on-error: true
       run: |
-        if pytest tests/ --tb=short 2>&1 | tee pytest_output.txt; then
+        # Run pytest and capture both output and exit code
+        set +e  # Don't exit on error
+        pytest tests/ --tb=short > pytest_output.txt 2>&1
+        PYTEST_EXIT_CODE=$?
+        set -e  # Re-enable exit on error
+        
+        # Check the actual exit code
+        if [ $PYTEST_EXIT_CODE -eq 0 ]; then
           echo "✅ All tests passed successfully!"
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
           echo "✅ All tests passed successfully!" > pytest_result.txt
@@ -172,7 +215,9 @@ jobs:
         else
           echo "❌ Some tests failed"
           echo "pytest_status=failed" >> $GITHUB_OUTPUT
-          cp pytest_output.txt pytest_result.txt
+          echo "❌ Some tests failed:" > pytest_result.txt
+          echo "" >> pytest_result.txt
+          cat pytest_output.txt >> pytest_result.txt
         fi
 
     # --- Create PR Comment with Results ---
@@ -262,15 +307,16 @@ jobs:
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
-        # OWASP Results
+        # OWASP Results - Fix the step reference
         echo "### 🔒 OWASP Dependency Check" >> pr_comment.md
-        if [ "${{ steps.owasp_check.outputs.owasp_status }}" == "passed" ]; then
+        OWASP_STATUS=$(grep "owasp_status=" $GITHUB_OUTPUT | cut -d'=' -f2 | tail -1)
+        if [ "$OWASP_STATUS" == "passed" ]; then
           echo "✅ **Passed** - No vulnerable dependencies found" >> pr_comment.md
-        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "warning" ]; then
+        elif [ "$OWASP_STATUS" == "warning" ]; then
           echo "⚠️ **Warning** - Low/medium severity vulnerabilities found" >> pr_comment.md
           WARNING_CHECKS+="OWASP (Low/Medium), "
           HAS_WARNINGS=true
-        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "failed" ]; then
+        elif [ "$OWASP_STATUS" == "failed" ]; then
           echo "❌ **Failed** - High/critical vulnerabilities found" >> pr_comment.md
           FAILED_CHECKS+="OWASP (High/Critical), "
           HAS_FAILURES=true
@@ -289,14 +335,8 @@ jobs:
         echo "📊 **Additional Resources:**" >> pr_comment.md
         echo "- [Security Tab](https://github.com/${{ github.repository }}/security/dependabot) - View all dependency alerts" >> pr_comment.md
         echo "- [Dependency Graph](https://github.com/${{ github.repository }}/network/dependencies) - Visual dependency tree" >> pr_comment.md
-        echo "- Download full OWASP reports from workflow artifacts" >> pr_comment.md
+        echo "- Download full OWASP reports (JSON & HTML) from workflow artifacts" >> pr_comment.md
         echo "</details>" >> pr_comment.md
-        echo "" >> pr_comment.md
-
-        # CodeQL Results
-        echo "### 🛡️ CodeQL Analysis" >> pr_comment.md
-        echo "📊 **Analysis Complete** - Results available in the **Security** tab" >> pr_comment.md
-        echo "Security findings (if any) will appear as annotations in the **Files changed** tab." >> pr_comment.md
         echo "" >> pr_comment.md
 
         # CodeQL Results
