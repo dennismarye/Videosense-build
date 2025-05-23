@@ -41,6 +41,7 @@ jobs:
         args: '--enableRetired --enableExperimental --failOnCVSS 7.0'
 
     - name: Process OWASP Results
+      id: process_owasp
       if: always()
       run: |
         echo "Processing OWASP Dependency Check results..."
@@ -307,15 +308,15 @@ jobs:
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
-        # OWASP Results - Fix the step reference
+        # OWASP Results
         echo "### 🔒 OWASP Dependency Check" >> pr_comment.md
-        if [ "${{ steps.owasp_check.outputs.owasp_status }}" == "passed" ]; then
+        if [ "${{ steps.process_owasp.outputs.owasp_status }}" == "passed" ]; then
           echo "✅ **Passed** - No vulnerable dependencies found" >> pr_comment.md
-        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "warning" ]; then
+        elif [ "${{ steps.process_owasp.outputs.owasp_status }}" == "warning" ]; then
           echo "⚠️ **Warning** - Low/medium severity vulnerabilities found" >> pr_comment.md
           WARNING_CHECKS+="OWASP (Low/Medium), "
           HAS_WARNINGS=true
-        elif [ "${{ steps.owasp_check.outputs.owasp_status }}" == "failed" ]; then
+        elif [ "${{ steps.process_owasp.outputs.owasp_status }}" == "failed" ]; then
           echo "❌ **Failed** - High/critical vulnerabilities found" >> pr_comment.md
           FAILED_CHECKS+="OWASP (High/Critical), "
           HAS_FAILURES=true
