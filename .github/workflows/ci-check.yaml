@@ -36,7 +36,7 @@ jobs:
       with:
         project: 'security-scan'
         path: '.'
-        format: 'JSON,HTML'  # Generate both JSON and HTML reports
+        format: 'ALL'  # Generates ALL formats
         out: './owasp-reports'
         args: '--enableRetired --enableExperimental --failOnCVSS 7.0'
 
@@ -95,8 +95,8 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: owasp-dependency-reports
-        path: ./owasp-reports/
+        name: owasp-dependency-html-report
+        path: ./owasp-reports/dependency-check-report.html
         retention-days: 7
 
     # --- Setup Python Environment ---
