@@ -42,3 +42,4 @@ vscode*
 *.pyc
 *.pyo
 *.pyd
+newrelic.ini
