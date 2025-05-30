@@ -57,7 +57,6 @@ class KafkaService:
                         "sasl.password": settings.KAFKA_PASSWORD,
                         "enable.ssl.certificate.verification": settings.KAFKA_AUTH_TYPE
                         == "SCRAM",
-                        "ssl.ca.location": "src/config/kafka.pem",
                         "log_level": 2,  # INFO log level
                     }
                 )

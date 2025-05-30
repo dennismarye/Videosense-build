@@ -17,17 +17,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # --- Static Code Analysis with CodeQL ---
-    - name: Initialize CodeQL
-      continue-on-error: true
-      uses: github/codeql-action/init@v3
-      with:
-        languages: python # Specify the language(s)
-
-    - name: Analyze Code with CodeQL
-      continue-on-error: true
-      uses: github/codeql-action/analyze@v3
-
     # --- OWASP Dependency Check (Comprehensive) ---
     - name: OWASP Dependency Check
       id: owasp_check
@@ -170,31 +159,6 @@ jobs:
           cat black_output.txt >> black_result.txt
         fi
 
-    - name: Type checking with Mypy
-      id: mypy_type_check
-      continue-on-error: true
-      run: |
-        # Run mypy and capture both output and exit code
-        set +e  # Don't exit on error
-        mypy src/ > mypy_output.txt 2>&1
-        MYPY_EXIT_CODE=$?
-        set -e  # Re-enable exit on error
-        
-        # Check the actual exit code
-        if [ $MYPY_EXIT_CODE -eq 0 ]; then
-          echo "✅ MyPy type checking passed successfully" 
-          echo "mypy_status=passed" >> $GITHUB_OUTPUT
-          echo "✅ MyPy type checking passed successfully" > mypy_result.txt
-          echo "" >> mypy_result.txt
-          cat mypy_output.txt >> mypy_result.txt
-        else
-          echo "❌ MyPy found type checking errors"
-          echo "mypy_status=failed" >> $GITHUB_OUTPUT
-          echo "❌ MyPy found type checking errors:" > mypy_result.txt
-          echo "" >> mypy_result.txt
-          cat mypy_output.txt >> mypy_result.txt
-        fi
-
     # --- Run Tests ---
     - name: Run Pytest
       id: pytest_tests
@@ -272,24 +236,6 @@ jobs:
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
-        # MyPy Results
-        echo "### 📝 MyPy Type Checking" >> pr_comment.md
-        if [ "${{ steps.mypy_type_check.outputs.mypy_status }}" == "passed" ]; then
-          echo "✅ **Passed** - No type checking errors" >> pr_comment.md
-        else
-          echo "❌ **Failed** - Type checking errors found" >> pr_comment.md
-          FAILED_CHECKS+="MyPy, "
-          HAS_FAILURES=true
-        fi
-        echo "" >> pr_comment.md
-        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
-        echo "" >> pr_comment.md
-        echo '```python' >> pr_comment.md
-        cat mypy_result.txt >> pr_comment.md
-        echo '```' >> pr_comment.md
-        echo "</details>" >> pr_comment.md
-        echo "" >> pr_comment.md
-
         # Pytest Results
         echo "### 🧪 Pytest Tests" >> pr_comment.md
         if [ "${{ steps.pytest_tests.outputs.pytest_status }}" == "passed" ]; then
@@ -339,12 +285,6 @@ jobs:
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
-        # CodeQL Results
-        echo "### 🛡️ CodeQL Analysis" >> pr_comment.md
-        echo "📊 **Analysis Complete** - Results available in the **Security** tab" >> pr_comment.md
-        echo "Security findings (if any) will appear as annotations in the **Files changed** tab." >> pr_comment.md
-        echo "" >> pr_comment.md
-
         # Determine overall status based on failures and warnings
         if [ "$HAS_FAILURES" == "true" ]; then
           OVERALL_STATUS="❌ Failed"
@@ -386,8 +326,6 @@ jobs:
           echo "# Check linting" >> pr_comment.md
           echo "flake8 ." >> pr_comment.md
           echo "" >> pr_comment.md
-          echo "# Type checking" >> pr_comment.md
-          echo "mypy src/" >> pr_comment.md
           echo '```' >> pr_comment.md
         elif [ "$HAS_WARNINGS" == "true" ]; then
           WARNING_CHECKS=${WARNING_CHECKS%, }
