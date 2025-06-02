@@ -30,7 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser main.py ./
 COPY --chown=appuser:appuser entrypoint.sh ./
-COPY --chown=appuser:appuser newrelic.ini ./
+# COPY --chown=appuser:appuser newrelic.ini ./
 
 RUN chmod +x ./entrypoint.sh
 
