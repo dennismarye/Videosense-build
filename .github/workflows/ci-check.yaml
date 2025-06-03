@@ -17,6 +17,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Write .env file from secret
+      run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
+
     # --- OWASP Dependency Check (Comprehensive) ---
     - name: OWASP Dependency Check
       id: owasp_check
