@@ -5,6 +5,7 @@ ffmpeg-python
 google-generativeai
 grpcio==1.67.1
 gunicorn
+newrelic
 Pillow
 pydantic
 pydantic_settings

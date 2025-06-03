@@ -2,6 +2,7 @@ import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
+import newrelic.agent
 
 
 load_dotenv()  # Explicitly load the .env file
@@ -46,12 +47,17 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: str
     GEMINI_KEY: str
 
+    # New Relic Configuration
+    NEW_RELIC_LICENSE_KEY: str
+    NEW_RELIC_APP_NAME: str
+
     # Model configuration for environment variable loading
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
 
+@lru_cache()
 def get_settings():
     """
     Cached settings retrieval to optimize performance
