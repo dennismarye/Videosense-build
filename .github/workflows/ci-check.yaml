@@ -20,8 +20,8 @@ jobs:
         fetch-depth: 0  # Fixes shallow clone warning - fetches full git history
         token: ${{ secrets.GITHUB_TOKEN }}  # Ensures proper access for blame information
 
-    # - name: Write .env file from secret
-    #   run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
+    - name: Write .env file from secret
+      run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
 
     # --- OWASP Dependency Check (Comprehensive) ---
     - name: OWASP Dependency Check
@@ -172,7 +172,7 @@ jobs:
       run: |
         # Run pytest and capture both output and exit code
         set +e  # Don't exit on error
-        pytest tests/ --tb=short > pytest_output.txt 2>&1
+        pytest tests/ --tb=short --cov=src --cov=main.py --cov-report=xml --cov-report=term > pytest_output.txt 2>&1
         PYTEST_EXIT_CODE=$?
         set -e  # Re-enable exit on error
         
@@ -182,7 +182,9 @@ jobs:
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
           echo "✅ All tests passed successfully!" > pytest_result.txt
           echo "" >> pytest_result.txt
-          tail -10 pytest_output.txt >> pytest_result.txt
+
+          # Include the full output (test results + coverage summary)
+          cat pytest_output.txt >> pytest_result.txt
         else
           echo "❌ Some tests failed"
           echo "pytest_status=failed" >> $GITHUB_OUTPUT
@@ -191,6 +193,12 @@ jobs:
           cat pytest_output.txt >> pytest_result.txt
         fi
 
+        # Check if coverage report was generated for SonarQube
+        if [ -f "coverage.xml" ]; then
+          echo "✅ Coverage XML report generated for SonarQube: coverage.xml"
+        else
+          echo "⚠️ Coverage XML report not found"
+        fi
     # --- Run Sonarqube Analysis ---
     - name: Run Sonarqube Scan
       id: sonar_scan
@@ -199,9 +207,6 @@ jobs:
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        SONAR_PULLREQUEST_KEY: ${{ github.event.pull_request.number }}
-        SONAR_PULLREQUEST_BRANCH: ${{ github.head_ref }}
-        SONAR_PULLREQUEST_BASE: ${{ github.base_ref }}
 
     # # --- Run Sonarqube Quality Gate ---
     # - name: Run Sonarqube Quality Gate
