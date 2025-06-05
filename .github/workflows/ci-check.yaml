@@ -234,10 +234,14 @@ jobs:
           # Extract task ID and server URL from report
           TASK_ID=$(grep "ceTaskId=" .scannerwork/report-task.txt | cut -d'=' -f2)
           SERVER_URL=$(grep "serverUrl=" .scannerwork/report-task.txt | cut -d'=' -f2)
-          DASHBOARD_URL=$(grep "dashboardUrl=" .scannerwork/report-task.txt | cut -d'=' -f2)
           
           echo "Task ID: $TASK_ID"
           echo "Server URL: $SERVER_URL"
+          
+          # Build proper dashboard URL using project key
+          PROJECT_KEY="${{ secrets.SONAR_PROJECT_KEY }}"
+          DASHBOARD_URL="${SERVER_URL}/dashboard?id=${PROJECT_KEY}"
+          
           echo "Dashboard URL: $DASHBOARD_URL"
           
           # Store dashboard URL for comment
@@ -249,51 +253,71 @@ jobs:
           
           # Try to get analysis results via SonarQube Web API
           if command -v curl >/dev/null 2>&1; then
-            # Extract project key from GitHub Secrets
-            PROJECT_KEY="${{ secrets.SONAR_PROJECT_KEY }}"
-            
-            # Get project measures from SonarQube API
             echo "Fetching project measures from SonarQube API..."
             
             # Fetch coverage
             COVERAGE_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
               "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=coverage" 2>/dev/null || echo "")
             
-            if echo "$COVERAGE_RESPONSE" | grep -q "coverage"; then
-              COVERAGE=$(echo "$COVERAGE_RESPONSE" | grep -o '"value":"[^"]*"' | head -1 | cut -d'"' -f4)
-              echo "sonar_coverage=${COVERAGE}%" >> $GITHUB_OUTPUT
+            echo "Coverage API Response: $COVERAGE_RESPONSE"
+            
+            if echo "$COVERAGE_RESPONSE" | grep -q '"value"'; then
+              COVERAGE=$(echo "$COVERAGE_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$COVERAGE" != "" ]; then
+                echo "sonar_coverage=${COVERAGE}%" >> $GITHUB_OUTPUT
+              else
+                echo "sonar_coverage=0.0%" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_coverage=N/A" >> $GITHUB_OUTPUT
             fi
             
             # Fetch bugs, code smells, vulnerabilities, security hotspots
             MEASURES_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
               "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=bugs,code_smells,vulnerabilities,security_hotspots" 2>/dev/null || echo "")
             
-            if echo "$MEASURES_RESPONSE" | grep -q "bugs"; then
-              BUGS=$(echo "$MEASURES_RESPONSE" | grep -A 1 '"metric":"bugs"' | grep '"value"' | cut -d'"' -f4)
-              echo "sonar_bugs=$BUGS" >> $GITHUB_OUTPUT
+            echo "Measures API Response: $MEASURES_RESPONSE"
+            
+            # Parse bugs
+            if echo "$MEASURES_RESPONSE" | grep -q '"metric":"bugs"'; then
+              BUGS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"bugs"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+              if [ "$BUGS" != "" ]; then
+                echo "sonar_bugs=$BUGS" >> $GITHUB_OUTPUT
+              fi
             fi
             
-            if echo "$MEASURES_RESPONSE" | grep -q "code_smells"; then
-              CODE_SMELLS=$(echo "$MEASURES_RESPONSE" | grep -A 1 '"metric":"code_smells"' | grep '"value"' | cut -d'"' -f4)
-              echo "sonar_code_smells=$CODE_SMELLS" >> $GITHUB_OUTPUT
+            # Parse code smells
+            if echo "$MEASURES_RESPONSE" | grep -q '"metric":"code_smells"'; then
+              CODE_SMELLS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"code_smells"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+              if [ "$CODE_SMELLS" != "" ]; then
+                echo "sonar_code_smells=$CODE_SMELLS" >> $GITHUB_OUTPUT
+              fi
             fi
             
-            if echo "$MEASURES_RESPONSE" | grep -q "vulnerabilities"; then
-              VULNERABILITIES=$(echo "$MEASURES_RESPONSE" | grep -A 1 '"metric":"vulnerabilities"' | grep '"value"' | cut -d'"' -f4)
-              echo "sonar_vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+            # Parse vulnerabilities
+            if echo "$MEASURES_RESPONSE" | grep -q '"metric":"vulnerabilities"'; then
+              VULNERABILITIES=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"vulnerabilities"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+              if [ "$VULNERABILITIES" != "" ]; then
+                echo "sonar_vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+              fi
             fi
             
-            if echo "$MEASURES_RESPONSE" | grep -q "security_hotspots"; then
-              SECURITY_HOTSPOTS=$(echo "$MEASURES_RESPONSE" | grep -A 1 '"metric":"security_hotspots"' | grep '"value"' | cut -d'"' -f4)
-              echo "sonar_security_hotspots=$SECURITY_HOTSPOTS" >> $GITHUB_OUTPUT
+            # Parse security hotspots
+            if echo "$MEASURES_RESPONSE" | grep -q '"metric":"security_hotspots"'; then
+              SECURITY_HOTSPOTS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"security_hotspots"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+              if [ "$SECURITY_HOTSPOTS" != "" ]; then
+                echo "sonar_security_hotspots=$SECURITY_HOTSPOTS" >> $GITHUB_OUTPUT
+              fi
             fi
             
             # Get Quality Gate status
             QG_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
               "$SERVER_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" 2>/dev/null || echo "")
             
-            if echo "$QG_RESPONSE" | grep -q "projectStatus"; then
-              QG_STATUS=$(echo "$QG_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+            echo "Quality Gate API Response: $QG_RESPONSE"
+            
+            if echo "$QG_RESPONSE" | grep -q '"status"'; then
+              QG_STATUS=$(echo "$QG_RESPONSE" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -1)
               echo "sonar_quality_gate=$QG_STATUS" >> $GITHUB_OUTPUT
               
               if [ "$QG_STATUS" = "OK" ]; then
@@ -311,16 +335,26 @@ jobs:
               echo "⚠️ Could not determine SonarQube Quality Gate status" > sonar_result.txt
             fi
             
+            # Get actual values for the summary (using shell variables, not GitHub outputs which aren't available yet)
+            ACTUAL_COVERAGE=$(echo "$COVERAGE_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+            ACTUAL_BUGS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"bugs"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+            ACTUAL_CODE_SMELLS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"code_smells"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+            ACTUAL_VULNERABILITIES=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"vulnerabilities"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+            ACTUAL_SECURITY_HOTSPOTS=$(echo "$MEASURES_RESPONSE" | sed -n '/"metric":"security_hotspots"/,/"value"/{s/.*"value":"\([^"]*\)".*/\1/p}' | head -1)
+            
             # Add summary to result file
             echo "" >> sonar_result.txt
             echo "📊 Analysis Summary:" >> sonar_result.txt
-            echo "Coverage: ${COVERAGE:-N/A}%" >> sonar_result.txt
-            echo "Bugs: ${BUGS:-N/A}" >> sonar_result.txt
-            echo "Code Smells: ${CODE_SMELLS:-N/A}" >> sonar_result.txt
-            echo "Vulnerabilities: ${VULNERABILITIES:-N/A}" >> sonar_result.txt
-            echo "Security Hotspots: ${SECURITY_HOTSPOTS:-N/A}" >> sonar_result.txt
             echo "" >> sonar_result.txt
-            echo "🔍 View full report: $DASHBOARD_URL" >> sonar_result.txt
+            echo "| Metric | Value |" >> sonar_result.txt
+            echo "|--------|-------|" >> sonar_result.txt
+            echo "| 📊 Coverage | ${ACTUAL_COVERAGE:-N/A}% |" >> sonar_result.txt
+            echo "| 🐛 Bugs | ${ACTUAL_BUGS:-0} |" >> sonar_result.txt
+            echo "| 💻 Code Smells | ${ACTUAL_CODE_SMELLS:-0} |" >> sonar_result.txt
+            echo "| 🔓 Vulnerabilities | ${ACTUAL_VULNERABILITIES:-0} |" >> sonar_result.txt
+            echo "| 🔥 Security Hotspots | ${ACTUAL_SECURITY_HOTSPOTS:-0} |" >> sonar_result.txt
+            echo "" >> sonar_result.txt
+            echo "🔍 [View Full Analysis in SonarQube]($DASHBOARD_URL)" >> sonar_result.txt
             
           else
             echo "⚠️ curl not available for API calls"
@@ -335,6 +369,17 @@ jobs:
           echo "❌ SonarQube analysis failed or report not generated" > sonar_result.txt
           echo "Check the SonarQube scan step for errors." >> sonar_result.txt
         fi
+            
+            # # Add summary to result file
+            # echo "" >> sonar_result.txt
+            # echo "📊 Analysis Summary:" >> sonar_result.txt
+            # echo "Coverage: ${COVERAGE:-N/A}%" >> sonar_result.txt
+            # echo "Bugs: ${BUGS:-N/A}" >> sonar_result.txt
+            # echo "Code Smells: ${CODE_SMELLS:-N/A}" >> sonar_result.txt
+            # echo "Vulnerabilities: ${VULNERABILITIES:-N/A}" >> sonar_result.txt
+            # echo "Security Hotspots: ${SECURITY_HOTSPOTS:-N/A}" >> sonar_result.txt
+            # echo "" >> sonar_result.txt
+            # echo "🔍 View full report: $DASHBOARD_URL" >> sonar_result.txt
 
     # --- Create PR Comment with Results ---
     - name: Create PR Comment
@@ -454,21 +499,21 @@ jobs:
           HAS_WARNINGS=true
         fi
         
-        # Add SonarQube summary table
-        echo "" >> pr_comment.md
-        echo "| Metric | Value |" >> pr_comment.md
-        echo "|--------|-------|" >> pr_comment.md
-        echo "| 📊 Coverage | ${{ steps.process_sonarqube.outputs.sonar_coverage }} |" >> pr_comment.md
-        echo "| 🐛 Bugs | ${{ steps.process_sonarqube.outputs.sonar_bugs }} |" >> pr_comment.md
-        echo "| 💻 Code Smells | ${{ steps.process_sonarqube.outputs.sonar_code_smells }} |" >> pr_comment.md
-        echo "| 🔓 Vulnerabilities | ${{ steps.process_sonarqube.outputs.sonar_vulnerabilities }} |" >> pr_comment.md
-        echo "| 🔥 Security Hotspots | ${{ steps.process_sonarqube.outputs.sonar_security_hotspots }} |" >> pr_comment.md
-        echo "" >> pr_comment.md
+        # # Add SonarQube summary table
+        # echo "" >> pr_comment.md
+        # echo "| Metric | Value |" >> pr_comment.md
+        # echo "|--------|-------|" >> pr_comment.md
+        # echo "| 📊 Coverage | ${{ steps.process_sonarqube.outputs.sonar_coverage }} |" >> pr_comment.md
+        # echo "| 🐛 Bugs | ${{ steps.process_sonarqube.outputs.sonar_bugs }} |" >> pr_comment.md
+        # echo "| 💻 Code Smells | ${{ steps.process_sonarqube.outputs.sonar_code_smells }} |" >> pr_comment.md
+        # echo "| 🔓 Vulnerabilities | ${{ steps.process_sonarqube.outputs.sonar_vulnerabilities }} |" >> pr_comment.md
+        # echo "| 🔥 Security Hotspots | ${{ steps.process_sonarqube.outputs.sonar_security_hotspots }} |" >> pr_comment.md
+        # echo "" >> pr_comment.md
         
-        # Add link to SonarQube dashboard
-        if [ "${{ steps.process_sonarqube.outputs.sonar_dashboard_url }}" != "" ]; then
-          echo "🔍 **[View Full Analysis in SonarQube](${{ steps.process_sonarqube.outputs.sonar_dashboard_url }})**" >> pr_comment.md
-        fi
+        # # Add link to SonarQube dashboard
+        # if [ "${{ steps.process_sonarqube.outputs.sonar_dashboard_url }}" != "" ]; then
+        #   echo "🔍 **[View Full Analysis in SonarQube](${{ steps.process_sonarqube.outputs.sonar_dashboard_url }})**" >> pr_comment.md
+        # fi
         
         echo "" >> pr_comment.md
         echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
