@@ -3,9 +3,11 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 import newrelic.agent
+from pathlib import Path 
 
 
-load_dotenv()  # Explicitly load the .env file
+# load_dotenv()  # Explicitly load the .env file
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 
 class Settings(BaseSettings):

@@ -50,3 +50,4 @@ kafka.pem
 *.pem
 *.crt
 *.key
+coverage.xml
