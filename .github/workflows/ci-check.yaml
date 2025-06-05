@@ -16,9 +16,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fixes shallow clone warning - fetches full git history
+        token: ${{ secrets.GITHUB_TOKEN }}  # Ensures proper access for blame information
 
-    - name: Write .env file from secret
-      run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
+    # - name: Write .env file from secret
+    #   run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
 
     # --- OWASP Dependency Check (Comprehensive) ---
     - name: OWASP Dependency Check
@@ -347,17 +350,13 @@ jobs:
               
               if [ "$QG_STATUS" = "OK" ]; then
                 echo "sonar_status=passed" >> $GITHUB_OUTPUT
-                echo "✅ SonarQube Quality Gate: PASSED" > sonar_result.txt
               elif [ "$QG_STATUS" = "ERROR" ]; then
                 echo "sonar_status=failed" >> $GITHUB_OUTPUT
-                echo "❌ SonarQube Quality Gate: FAILED" > sonar_result.txt
               else
                 echo "sonar_status=warning" >> $GITHUB_OUTPUT
-                echo "⚠️ SonarQube Quality Gate: $QG_STATUS" > sonar_result.txt
               fi
             else
               echo "sonar_status=unknown" >> $GITHUB_OUTPUT
-              echo "⚠️ Could not determine SonarQube Quality Gate status" > sonar_result.txt
             fi
             
             # Get actual values for the summary (now using individual variables)
@@ -494,13 +493,13 @@ jobs:
         # SonarQube Results
         echo "### 🔍 SonarQube Analysis" >> pr_comment.md
         if [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "passed" ]; then
-          echo "✅ **Quality Gate: PASSED**" >> pr_comment.md
+          echo "✅ **SonarQube Quality Gate: PASSED**" >> pr_comment.md
         elif [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "failed" ]; then
-          echo "❌ **Quality Gate: FAILED**" >> pr_comment.md
+          echo "❌ **SonarQube Quality Gate: FAILED**" >> pr_comment.md
           FAILED_CHECKS+="SonarQube, "
           HAS_FAILURES=true
         elif [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "warning" ]; then
-          echo "⚠️ **Quality Gate: WARNING**" >> pr_comment.md
+          echo "⚠️ **SonarQube Quality Gate: WARNING**" >> pr_comment.md
           WARNING_CHECKS+="SonarQube, "
           HAS_WARNINGS=true
         else
