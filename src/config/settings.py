@@ -3,7 +3,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 import newrelic.agent
-from pathlib import Path 
+from pathlib import Path
 
 
 # load_dotenv()  # Explicitly load the .env file
