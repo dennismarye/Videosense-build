@@ -16,6 +16,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fixes shallow clone warning - fetches full git history
+        token: ${{ secrets.GITHUB_TOKEN }}  # Ensures proper access for blame information
 
     - name: Write .env file from secret
       run: echo "${{ secrets.TEST_ENV }}" > src/config/.env
@@ -109,7 +112,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest httpx requests
-        pip install flake8 black mypy
+        pip install flake8 black pytest-cov
 
     # --- Code Quality Checks ---
     - name: Lint with Flake8
@@ -168,8 +171,9 @@ jobs:
       continue-on-error: true
       run: |
         # Run pytest and capture both output and exit code
+        rm -f .coverage coverage.xml
         set +e  # Don't exit on error
-        pytest tests/ --tb=short > pytest_output.txt 2>&1
+        pytest tests/ --tb=short --cov=. --cov-report=term --cov-report=xml --cov-config=.coveragerc > pytest_output.txt 2>&1
         PYTEST_EXIT_CODE=$?
         set -e  # Re-enable exit on error
         
@@ -179,13 +183,217 @@ jobs:
           echo "pytest_status=passed" >> $GITHUB_OUTPUT
           echo "✅ All tests passed successfully!" > pytest_result.txt
           echo "" >> pytest_result.txt
-          tail -10 pytest_output.txt >> pytest_result.txt
+
+          # Include the full output (test results + coverage summary)
+          cat pytest_output.txt >> pytest_result.txt
         else
           echo "❌ Some tests failed"
           echo "pytest_status=failed" >> $GITHUB_OUTPUT
           echo "❌ Some tests failed:" > pytest_result.txt
           echo "" >> pytest_result.txt
           cat pytest_output.txt >> pytest_result.txt
+        fi
+
+        # Check if coverage report was generated for SonarQube
+        if [ -f "coverage.xml" ]; then
+          echo "✅ Coverage XML report generated for SonarQube: coverage.xml"
+        else
+          echo "⚠️ Coverage XML report not found"
+        fi
+    # --- Run Sonarqube Analysis ---
+    - name: Run Sonarqube Scan
+      id: sonar_scan
+      continue-on-error: true
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    # # --- Run Sonarqube Quality Gate ---
+    # - name: Run Sonarqube Quality Gate
+    #   id: sonar_quality_gate
+    #   continue-on-error: true
+    #   uses: sonarsource/sonarqube-quality-gate-action@master
+    #   timeout-minutes: 5
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    # --- Process SonarQube Results ---
+    - name: Process SonarQube Results
+      id: process_sonarqube
+      if: always()
+      continue-on-error: true
+      run: |
+        echo "Processing SonarQube results..."
+        
+        # Initialize status as unknown
+        echo "sonar_status=unknown" >> $GITHUB_OUTPUT
+        echo "sonar_coverage=N/A" >> $GITHUB_OUTPUT
+        echo "sonar_bugs=N/A" >> $GITHUB_OUTPUT
+        echo "sonar_code_smells=N/A" >> $GITHUB_OUTPUT
+        echo "sonar_security_hotspots=N/A" >> $GITHUB_OUTPUT
+        echo "sonar_vulnerabilities=N/A" >> $GITHUB_OUTPUT
+        echo "sonar_quality_gate=N/A" >> $GITHUB_OUTPUT
+        
+        # Check if scanner work directory exists
+        if [ -f ".scannerwork/report-task.txt" ]; then
+          echo "✅ SonarQube report found, extracting information..."
+          
+          # Extract task ID and server URL from report
+          TASK_ID=$(grep "ceTaskId=" .scannerwork/report-task.txt | cut -d'=' -f2)
+          SERVER_URL=$(grep "serverUrl=" .scannerwork/report-task.txt | cut -d'=' -f2)
+          
+          echo "Task ID: $TASK_ID"
+          echo "Server URL: $SERVER_URL"
+          
+          # Build proper dashboard URL using project key
+          PROJECT_KEY="${{ secrets.SONAR_PROJECT_KEY }}"
+          DASHBOARD_URL="${SERVER_URL}/dashboard?id=${PROJECT_KEY}"
+          
+          echo "Dashboard URL: $DASHBOARD_URL"
+          
+          # Store dashboard URL for comment
+          echo "sonar_dashboard_url=$DASHBOARD_URL" >> $GITHUB_OUTPUT
+          
+          # Wait a bit for SonarQube to process (alternative to quality gate action)
+          echo "Waiting for SonarQube analysis to complete..."
+          sleep 30
+          
+          # Try to get analysis results via SonarQube Web API
+          if command -v curl >/dev/null 2>&1; then
+            echo "Fetching project measures from SonarQube API..."
+            
+            # Fetch coverage
+            COVERAGE_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=coverage" 2>/dev/null || echo "")
+            
+            echo "Coverage API Response: $COVERAGE_RESPONSE"
+            
+            if echo "$COVERAGE_RESPONSE" | grep -q '"value"'; then
+              COVERAGE=$(echo "$COVERAGE_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$COVERAGE" != "" ]; then
+                echo "sonar_coverage=${COVERAGE}%" >> $GITHUB_OUTPUT
+              else
+                echo "sonar_coverage=0.0%" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_coverage=N/A" >> $GITHUB_OUTPUT
+            fi
+            
+            # Fetch each metric individually for accurate parsing
+            echo "Fetching individual metrics..."
+            
+            # Fetch bugs
+            BUGS_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=bugs" 2>/dev/null || echo "")
+            echo "Bugs API Response: $BUGS_RESPONSE"
+            
+            if echo "$BUGS_RESPONSE" | grep -q '"value"'; then
+              BUGS=$(echo "$BUGS_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$BUGS" != "" ]; then
+                echo "sonar_bugs=$BUGS" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_bugs=0" >> $GITHUB_OUTPUT
+              BUGS="0"
+            fi
+            
+            # Fetch code smells
+            CODE_SMELLS_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=code_smells" 2>/dev/null || echo "")
+            echo "Code Smells API Response: $CODE_SMELLS_RESPONSE"
+            
+            if echo "$CODE_SMELLS_RESPONSE" | grep -q '"value"'; then
+              CODE_SMELLS=$(echo "$CODE_SMELLS_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$CODE_SMELLS" != "" ]; then
+                echo "sonar_code_smells=$CODE_SMELLS" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_code_smells=0" >> $GITHUB_OUTPUT
+              CODE_SMELLS="0"
+            fi
+            
+            # Fetch vulnerabilities
+            VULNERABILITIES_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=vulnerabilities" 2>/dev/null || echo "")
+            echo "Vulnerabilities API Response: $VULNERABILITIES_RESPONSE"
+            
+            if echo "$VULNERABILITIES_RESPONSE" | grep -q '"value"'; then
+              VULNERABILITIES=$(echo "$VULNERABILITIES_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$VULNERABILITIES" != "" ]; then
+                echo "sonar_vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_vulnerabilities=0" >> $GITHUB_OUTPUT
+              VULNERABILITIES="0"
+            fi
+            
+            # Fetch security hotspots
+            SECURITY_HOTSPOTS_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/measures/component?component=$PROJECT_KEY&metricKeys=security_hotspots" 2>/dev/null || echo "")
+            echo "Security Hotspots API Response: $SECURITY_HOTSPOTS_RESPONSE"
+            
+            if echo "$SECURITY_HOTSPOTS_RESPONSE" | grep -q '"value"'; then
+              SECURITY_HOTSPOTS=$(echo "$SECURITY_HOTSPOTS_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+              if [ "$SECURITY_HOTSPOTS" != "" ]; then
+                echo "sonar_security_hotspots=$SECURITY_HOTSPOTS" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_security_hotspots=0" >> $GITHUB_OUTPUT
+              SECURITY_HOTSPOTS="0"
+            fi
+            
+            # Get Quality Gate status
+            QG_RESPONSE=$(curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+              "$SERVER_URL/api/qualitygates/project_status?projectKey=$PROJECT_KEY" 2>/dev/null || echo "")
+            
+            echo "Quality Gate API Response: $QG_RESPONSE"
+            
+            if echo "$QG_RESPONSE" | grep -q '"status"'; then
+              QG_STATUS=$(echo "$QG_RESPONSE" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -1)
+              echo "sonar_quality_gate=$QG_STATUS" >> $GITHUB_OUTPUT
+              
+              if [ "$QG_STATUS" = "OK" ]; then
+                echo "sonar_status=passed" >> $GITHUB_OUTPUT
+              elif [ "$QG_STATUS" = "ERROR" ]; then
+                echo "sonar_status=failed" >> $GITHUB_OUTPUT
+              else
+                echo "sonar_status=warning" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "sonar_status=unknown" >> $GITHUB_OUTPUT
+            fi
+            
+            # Get actual values for the summary (now using individual variables)
+            ACTUAL_COVERAGE=$(echo "$COVERAGE_RESPONSE" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p' | head -1)
+            
+            # Add summary to result file
+            echo "" >> sonar_result.txt
+            echo "📊 Analysis Summary:" >> sonar_result.txt
+            echo "" >> sonar_result.txt
+            echo "| Metric | Value |" >> sonar_result.txt
+            echo "|--------|-------|" >> sonar_result.txt
+            echo "| 📊 Coverage | ${ACTUAL_COVERAGE:-N/A}% |" >> sonar_result.txt
+            echo "| 🐛 Bugs | ${BUGS:-0} |" >> sonar_result.txt
+            echo "| 💻 Code Smells | ${CODE_SMELLS:-0} |" >> sonar_result.txt
+            echo "| 🔓 Vulnerabilities | ${VULNERABILITIES:-0} |" >> sonar_result.txt
+            echo "| 🔥 Security Hotspots | ${SECURITY_HOTSPOTS:-0} |" >> sonar_result.txt
+            echo "" >> sonar_result.txt
+            echo "🔍 [View Full Analysis in SonarQube]($DASHBOARD_URL)" >> sonar_result.txt
+            
+          else
+            echo "⚠️ curl not available for API calls"
+            echo "sonar_status=unknown" >> $GITHUB_OUTPUT
+            echo "⚠️ SonarQube analysis completed but could not fetch detailed results" > sonar_result.txt
+            echo "🔍 View full report: $DASHBOARD_URL" >> sonar_result.txt
+          fi
+          
+        else
+          echo "❌ SonarQube report not found at .scannerwork/report-task.txt"
+          echo "sonar_status=failed" >> $GITHUB_OUTPUT
+          echo "❌ SonarQube analysis failed or report not generated" > sonar_result.txt
+          echo "Check the SonarQube scan step for errors." >> sonar_result.txt
         fi
 
     # --- Create PR Comment with Results ---
@@ -285,6 +493,31 @@ jobs:
         echo "- [Security Tab](https://github.com/${{ github.repository }}/security/dependabot) - View all dependency alerts" >> pr_comment.md
         echo "- [Dependency Graph](https://github.com/${{ github.repository }}/network/dependencies) - Visual dependency tree" >> pr_comment.md
         echo "- Download full OWASP reports (JSON & HTML) from workflow artifacts" >> pr_comment.md
+        echo "</details>" >> pr_comment.md
+        echo "" >> pr_comment.md
+
+        # SonarQube Results
+        echo "### 🔍 SonarQube Analysis" >> pr_comment.md
+        if [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "passed" ]; then
+          echo "✅ **SonarQube Quality Gate: PASSED**" >> pr_comment.md
+        elif [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "failed" ]; then
+          echo "❌ **SonarQube Quality Gate: FAILED**" >> pr_comment.md
+          FAILED_CHECKS+="SonarQube, "
+          HAS_FAILURES=true
+        elif [ "${{ steps.process_sonarqube.outputs.sonar_status }}" == "warning" ]; then
+          echo "⚠️ **SonarQube Quality Gate: WARNING**" >> pr_comment.md
+          WARNING_CHECKS+="SonarQube, "
+          HAS_WARNINGS=true
+        else
+          echo "⚠️ **Status: UNKNOWN** - Could not determine quality gate status" >> pr_comment.md
+          WARNING_CHECKS+="SonarQube (Unknown), "
+          HAS_WARNINGS=true
+        fi
+        
+        echo "" >> pr_comment.md
+        echo "<details><summary>📄 View Details</summary>" >> pr_comment.md
+        echo "" >> pr_comment.md
+        cat sonar_result.txt >> pr_comment.md
         echo "</details>" >> pr_comment.md
         echo "" >> pr_comment.md
 
