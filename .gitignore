@@ -46,3 +46,8 @@ newrelic.ini
 ./newrelic*
 newrelic.*
 ./newrelic.ini
+kafka.pem
+*.pem
+*.crt
+*.key
+coverage.xml
