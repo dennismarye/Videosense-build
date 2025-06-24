@@ -21,37 +21,51 @@ from src.video_processor.video_processor import VideoProcessor
 from src.monitoring.health_check import KafkaMonitorService
 
 
-def initialize_new_relic():
+# Configure logging with New Relic integration
+environment = settings.NODE_ENV
+
+
+LOG_LEVEL = logging.DEBUG if environment == "development" else logging.INFO
+
+
+def initialize_new_relic(env: str) -> None:
     """
     Initialize New Relic with configuration from settings
     """
-    # Set New Relic configuration as environment variables
-    os.environ["NEW_RELIC_LICENSE_KEY"] = settings.NEW_RELIC_LICENSE_KEY
-    os.environ["NEW_RELIC_APP_NAME"] = settings.NEW_RELIC_APP_NAME
-    os.environ["NEW_RELIC_LOG_FILE"] = "stdout"
-    os.environ["NEW_RELIC_LOG_LEVEL"] = "info"
-    os.environ["NEW_RELIC_MONITOR_MODE"] = "true"
-    os.environ["NEW_RELIC_HIGH_SECURITY"] = "false"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_ENABLED"] = "true"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_TRANSACTION_THRESHOLD"] = "apdex_f"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_RECORD_SQL"] = "obfuscated"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_STACK_TRACE_THRESHOLD"] = "0.5"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_EXPLAIN_ENABLED"] = "true"
-    os.environ["NEW_RELIC_TRANSACTION_TRACER_EXPLAIN_THRESHOLD"] = "0.5"
-    os.environ["NEW_RELIC_ERROR_COLLECTOR_ENABLED"] = "true"
-    os.environ["NEW_RELIC_BROWSER_MONITORING_AUTO_INSTRUMENT"] = "true"
-    os.environ["NEW_RELIC_THREAD_PROFILER_ENABLED"] = "true"
-    os.environ["NEW_RELIC_DISTRIBUTED_TRACING_ENABLED"] = "true"
 
-    # Initialize New Relic agent
-    newrelic.agent.initialize()
+    if env == "production":
+
+        # Set New Relic configuration as environment variables
+        os.environ["NEW_RELIC_LICENSE_KEY"] = settings.NEW_RELIC_LICENSE_KEY
+        os.environ["NEW_RELIC_APP_NAME"] = settings.NEW_RELIC_APP_NAME
+        os.environ["NEW_RELIC_LOG_FILE"] = "stdout"
+        os.environ["NEW_RELIC_LOG_LEVEL"] = "info"
+        os.environ["NEW_RELIC_MONITOR_MODE"] = "true"
+        os.environ["NEW_RELIC_HIGH_SECURITY"] = "false"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_ENABLED"] = "true"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_TRANSACTION_THRESHOLD"] = "apdex_f"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_RECORD_SQL"] = "obfuscated"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_STACK_TRACE_THRESHOLD"] = "0.5"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_EXPLAIN_ENABLED"] = "true"
+        os.environ["NEW_RELIC_TRANSACTION_TRACER_EXPLAIN_THRESHOLD"] = "0.5"
+        os.environ["NEW_RELIC_ERROR_COLLECTOR_ENABLED"] = "true"
+        os.environ["NEW_RELIC_BROWSER_MONITORING_AUTO_INSTRUMENT"] = "true"
+        os.environ["NEW_RELIC_THREAD_PROFILER_ENABLED"] = "true"
+        os.environ["NEW_RELIC_DISTRIBUTED_TRACING_ENABLED"] = "true"
+
+        logger = logging.getLogger(__name__)
+        # Initialize New Relic agent
+        try:
+            newrelic.agent.initialize()
+            logger.info("New Relic monitoring initialized successfully")
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize New Relic: {e}. Application will continue without monitoring.",
+            )
 
 
-initialize_new_relic()
-
-# Configure logging with New Relic integration
-environment = settings.NODE_ENV
-log_level = logging.DEBUG if environment == "development" else logging.INFO
+initialize_new_relic(environment)
 
 
 # Create a custom formatter that includes New Relic context
@@ -64,7 +78,7 @@ class CustomNewRelicFormatter(NewRelicContextFormatter):
 
 # Configure root logger
 root_logger = logging.getLogger()
-root_logger.setLevel(log_level)
+root_logger.setLevel(LOG_LEVEL)
 
 # Create handler with New Relic formatter
 handler = logging.StreamHandler()

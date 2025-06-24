@@ -27,6 +27,11 @@ logging.getLogger("kafka").setLevel(logging.WARNING)
 load_dotenv()
 
 
+TEST_CLOUDFRONT_VIDEO_URL = (
+    "https://d31plimlx9v8b3.cloudfront.net/meicam_1722429312169.mp4"
+)
+
+
 @pytest.mark.asyncio
 async def test_process_videos_basic():
     """
@@ -63,7 +68,8 @@ async def test_process_videos_basic():
                     "smallHsl": "https://s3.eu-west-2.amazonaws.com/app.circleandclique.org/transcoded-videos/a605cfcf-82dc-436f-939f-87d19ca4d100.m3u8",
                     "mediumMpd": "",
                     "mediumHsl": "https://s3.eu-west-2.amazonaws.com/app.circleandclique.org/transcoded-videos/a605cfcf-82dc-436f-939f-87d19ca4d100.m3u8",
-                    "original": "https://s3.eu-west-2.amazonaws.com/app.circleandclique.org/original-files/a605cfcf-82dc-436f-939f-87d19ca4d100.mp4",
+                    "original": TEST_CLOUDFRONT_VIDEO_URL,
+                    "cachedoriginal": TEST_CLOUDFRONT_VIDEO_URL,
                     "version": 1,
                     "isDeleted": False,
                     "id": "6810a82febe3d79ad2b053dc",
@@ -110,5 +116,5 @@ async def test_process_videos_basic():
         """
         invalid_message_data = {"random": "data"}
 
-        with pytest.raises(Exception) as excinfo:
+        with pytest.raises((KeyError, ValueError, TypeError)):
             await VideoProcessor.process_videos(invalid_message_data)
