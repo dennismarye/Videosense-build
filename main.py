@@ -61,7 +61,7 @@ def initialize_new_relic(env: str) -> None:
 
         except Exception as e:
             logger.warning(
-                f"Failed to initialize New Relic: {e}. Application will continue without monitoring."
+                f"Failed to initialize New Relic: {e}. Application will continue without monitoring.",
             )
 
 
