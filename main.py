@@ -27,12 +27,13 @@ environment = settings.NODE_ENV
 log_level = logging.DEBUG if environment == "development" else logging.INFO
 
 
-def initialize_new_relic(environment):
+def initialize_new_relic(env: str) -> None:
+    """
+    Initialize New Relic with configuration from settings
+    """
 
-    if environment == "production":
-        """
-        Initialize New Relic with configuration from settings
-        """
+    if env == "production":
+
         # Set New Relic configuration as environment variables
         os.environ["NEW_RELIC_LICENSE_KEY"] = settings.NEW_RELIC_LICENSE_KEY
         os.environ["NEW_RELIC_APP_NAME"] = settings.NEW_RELIC_APP_NAME
@@ -52,9 +53,13 @@ def initialize_new_relic(environment):
         os.environ["NEW_RELIC_DISTRIBUTED_TRACING_ENABLED"] = "true"
 
         # Initialize New Relic agent
-        newrelic.agent.initialize()
-    else:
-        return
+        try:
+            newrelic.agent.initialize()
+            logging.info("New Relic monitoring initialized successfully")
+        except Exception as e:
+            logging.warning(
+                f"Failed to initialize New Relic: {e}. Application will continue without monitoring."
+            )
 
 
 initialize_new_relic(environment)
