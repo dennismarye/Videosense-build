@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: str
     GEMINI_KEY: str
 
-    # New Relic Configuration
+
+class ProductionSettings(Settings):
+    # Production-only fields
     NEW_RELIC_LICENSE_KEY: str
     NEW_RELIC_APP_NAME: str
 
@@ -61,10 +63,13 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings():
-    """
-    Cached settings retrieval to optimize performance
-    """
-    return Settings()
+    """Factory function to return appropriate settings class"""
+    environment = os.getenv("NODE_ENV", "development").lower()
+
+    if environment == "production":
+        return ProductionSettings()
+    else:
+        return Settings()
 
 
 # Instantiate settings
