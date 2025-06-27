@@ -57,3 +57,4 @@ coverage.xml
 # Log directories
 logs/
 log/
+*.json
