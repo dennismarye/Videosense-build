@@ -51,3 +51,9 @@ kafka.pem
 *.crt
 *.key
 coverage.xml
+# All log files
+*.log
+
+# Log directories
+logs/
+log/
