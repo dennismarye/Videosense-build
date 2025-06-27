@@ -17,24 +17,17 @@ from newrelic.agent import NewRelicContextFormatter
 
 from src.config.settings import settings
 from src.services.kafka_service import KafkaService
-from src.video_processor.video_processor import VideoProcessor
+from src.video_processor.video_processor import EnhancedVideoProcessor
 from src.monitoring.health_check import KafkaMonitorService
-
 
 # Configure logging with New Relic integration
 environment = settings.NODE_ENV
-
-
 LOG_LEVEL = logging.DEBUG if environment == "development" else logging.INFO
 
 
 def initialize_new_relic(env: str) -> None:
-    """
-    Initialize New Relic with configuration from settings
-    """
-
+    """Initialize New Relic with configuration from settings"""
     if env == "production":
-
         # Set New Relic configuration as environment variables
         os.environ["NEW_RELIC_LICENSE_KEY"] = settings.NEW_RELIC_LICENSE_KEY
         os.environ["NEW_RELIC_APP_NAME"] = settings.NEW_RELIC_APP_NAME
@@ -54,11 +47,9 @@ def initialize_new_relic(env: str) -> None:
         os.environ["NEW_RELIC_DISTRIBUTED_TRACING_ENABLED"] = "true"
 
         logger = logging.getLogger(__name__)
-        # Initialize New Relic agent
         try:
             newrelic.agent.initialize()
             logger.info("New Relic monitoring initialized successfully")
-
         except Exception as e:
             logger.warning(
                 f"Failed to initialize New Relic: {e}. Application will continue without monitoring.",
@@ -66,15 +57,6 @@ def initialize_new_relic(env: str) -> None:
 
 
 initialize_new_relic(environment)
-
-
-# Create a custom formatter that includes New Relic context
-class CustomNewRelicFormatter(NewRelicContextFormatter):
-    def format(self, record):
-        # Add custom formatting while preserving New Relic context
-        formatted = super().format(record)
-        return f"%(asctime)s - %(name)s - %(levelname)s - {formatted}"
-
 
 # Configure root logger
 root_logger = logging.getLogger()
@@ -102,76 +84,97 @@ kafka_service = KafkaService()
 monitor = KafkaMonitorService()
 stop_event = threading.Event()
 
+# Enhanced Video Processor
+enhanced_processor = EnhancedVideoProcessor()
 
-# Decorator for New Relic transaction tracking
+
 @newrelic.agent.function_trace()
 def run_kafka_consumer():
     """Run Kafka consumer in a thread with New Relic tracing"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        # Add New Relic background task context
         with newrelic.agent.BackgroundTask(
             application=newrelic.agent.application(), name="kafka_consumer_task"
         ):
             loop.run_until_complete(
                 kafka_service.consume(
-                    topics=[settings.INPUT_TOPIC],
+                    topics=[settings.INPUT_TOPIC],  # file-service topic
                     message_handler=process_kafka_message,
                     stop_event=stop_event,
                 )
             )
     except Exception as e:
-        # Record exception with New Relic
         newrelic.agent.record_exception()
         logging.error(f"Kafka consumer error: {e}")
     finally:
         loop.close()
 
 
-# Background task to process Kafka messages with New Relic tracing
 @newrelic.agent.background_task()
 async def process_kafka_message(message_data):
-    """Process Kafka messages with New Relic monitoring"""
+    """Process Kafka messages with enhanced two-stage video classification"""
     try:
-        # Add custom attributes for better monitoring
         newrelic.agent.add_custom_attribute("kafka.topic", settings.INPUT_TOPIC)
         newrelic.agent.add_custom_attribute("message.size", len(str(message_data)))
 
-        logging.info(f"Received message: {message_data}")
+        logging.info(f"Received CircoPost message: {message_data}")
 
-        # Track video processing as a separate trace
-        with newrelic.agent.FunctionTrace(name="video_processing"):
-            processed_result = await VideoProcessor.process_videos(message_data)
+        # Stage 1: Safety Check + Video Tagging
+        with newrelic.agent.FunctionTrace(name="safety_check_and_tagging"):
+            safety_result = await enhanced_processor.process_safety_and_tagging(
+                message_data
+            )
 
-        if processed_result:
-            # Track Kafka production
-            with newrelic.agent.FunctionTrace(name="kafka_produce"):
+        if safety_result:
+            # Produce to safety check topic
+            with newrelic.agent.FunctionTrace(name="kafka_produce_safety"):
                 await kafka_service.produce(
-                    topic=settings.OUTPUT_TOPIC, data=processed_result
+                    topic="classification.safety_check_passed", data=safety_result
+                )
+            logging.info(f"Produced safety check result: {safety_result}")
+
+            # Stage 2: Quality Analysis + Description Analysis (only if safety check passed)
+            if safety_result.get("safety_check", {}).get("contentFlag") in [
+                "SAFE",
+                "RESTRICT_18+",
+            ]:
+                with newrelic.agent.FunctionTrace(
+                    name="quality_and_description_analysis"
+                ):
+                    # Extract AI context from Stage 1 results
+                    ai_context = safety_result.get("aiContext", "")
+                    quality_result = (
+                        await enhanced_processor.process_quality_and_description(
+                            message_data, ai_context=ai_context
+                        )
+                    )
+
+                if quality_result:
+                    # Produce to quality analysis topic
+                    with newrelic.agent.FunctionTrace(name="kafka_produce_quality"):
+                        await kafka_service.produce(
+                            topic="classification.quality_analysis", data=quality_result
+                        )
+                    logging.info(f"Produced quality analysis result: {quality_result}")
+            else:
+                logging.warning(
+                    f"Video failed safety check, skipping quality analysis. Job ID: {safety_result.get('jobId')}"
                 )
 
-            newrelic.agent.add_custom_attribute("processing.success", True)
-            logging.info(
-                f"Produced result to {settings.OUTPUT_TOPIC}: {processed_result}"
-            )
-        else:
-            newrelic.agent.add_custom_attribute("processing.success", False)
-            logging.warning("Processed result is empty or None.")
+        newrelic.agent.add_custom_attribute("processing.success", True)
 
     except Exception as e:
-        # Record exception with New Relic
         newrelic.agent.record_exception()
         newrelic.agent.add_custom_attribute("processing.error", str(e))
-        logging.error(f"Error in message processing: {e}")
+        logging.error(f"Error in enhanced message processing: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan with New Relic monitoring"""
-    logging.info("Starting application...")
+    logging.info("Starting Enhanced Video Classification Service...")
 
-    # Add New Relic custom event for application startup
     newrelic.agent.record_custom_event(
         "ApplicationLifecycle", {"event": "startup", "environment": environment}
     )
@@ -181,7 +184,6 @@ async def lifespan(app: FastAPI):
         kafka_thread.start()
         initial_status = monitor.get_health_status()
 
-        # Record initial health status with New Relic
         newrelic.agent.add_custom_attribute(
             "initial_health_status", initial_status["status"]
         )
@@ -194,27 +196,23 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logging.info("Shutting down application...")
+    logging.info("Shutting down Enhanced Video Classification Service...")
 
-    # Record shutdown event
     newrelic.agent.record_custom_event(
         "ApplicationLifecycle", {"event": "shutdown", "environment": environment}
     )
 
-    # Signal the Kafka consumer thread to stop
     stop_event.set()
-    # Wait for the thread to finish (with a timeout to prevent hanging)
     kafka_thread.join(timeout=5)
-    # Additional cleanup
     await kafka_service.close_consumer()
     logging.info("Kafka consumer stopped.")
 
 
 # FastAPI Application with New Relic
 app = FastAPI(
-    title="Video Processing Microservice",
-    description="Kafka-based video processing microservice with New Relic monitoring",
-    version="1.0.0",
+    title="Enhanced Video Classification Service",
+    description="Advanced Kafka-based video classification with safety, quality, and description analysis",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -224,19 +222,20 @@ app = FastAPI(
 async def health_check():
     """Comprehensive health check endpoint with New Relic monitoring"""
     try:
-        # Add custom attributes for monitoring
         newrelic.agent.add_custom_attribute("endpoint", "health_check")
 
         status = monitor.get_health_status()
 
-        # Record health status metrics
+        # Add enhanced processor health check
+        processor_status = enhanced_processor.get_health_status()
+        status["enhanced_processor"] = processor_status
+
         newrelic.agent.add_custom_attribute("health_status", status["status"])
         if "kafka_connection" in status:
             newrelic.agent.add_custom_attribute(
                 "kafka_connection", status["kafka_connection"]
             )
 
-        # Record custom metric for health checks
         newrelic.agent.record_custom_metric(
             "Custom/HealthCheck/Success", 1 if status["status"] == "healthy" else 0
         )
@@ -248,7 +247,6 @@ async def health_check():
         )
 
     except Exception as e:
-        # Record exception and error metrics
         newrelic.agent.record_exception()
         newrelic.agent.record_custom_metric("Custom/HealthCheck/Error", 1)
 
@@ -261,16 +259,23 @@ async def health_check():
 @app.get("/metrics")
 @newrelic.agent.web_transaction()
 async def get_metrics():
-    """Custom metrics endpoint for additional monitoring"""
+    """Enhanced metrics endpoint for video classification monitoring"""
     try:
-        # You can add custom business metrics here
         metrics = {
-            "service": "video-processing",
-            "version": "1.0.0",
+            "service": "enhanced-video-classification",
+            "version": "2.0.0",
             "environment": environment,
             "kafka_topics": {
                 "input": settings.INPUT_TOPIC,
-                "output": settings.OUTPUT_TOPIC,
+                "safety_output": "classification.safety_check_passed",
+                "quality_output": "classification.quality_analysis",
+            },
+            "features": {
+                "safety_check": True,
+                "video_tagging": True,
+                "quality_analysis": True,
+                "description_analysis": True,
+                "gemini_integration": True,
             },
         }
 
@@ -285,9 +290,8 @@ async def get_metrics():
 
 def signal_handler(sig, frame):
     """Signal handler with New Relic event recording"""
-    print("Received shutdown signal, stopping application...")
+    print("Received shutdown signal, stopping Enhanced Video Classification Service...")
 
-    # Record shutdown signal event
     newrelic.agent.record_custom_event(
         "ApplicationSignal", {"signal": sig, "action": "shutdown"}
     )
@@ -301,17 +305,16 @@ if __name__ == "__main__":
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Record application start event
         newrelic.agent.record_custom_event(
             "ApplicationStart",
             {
                 "method": "gunicorn",
                 "environment": environment,
                 "workers": os.getenv("WORKERS", "1"),
+                "service": "enhanced-video-classification",
             },
         )
 
-        # Construct the gunicorn command
         cmd = [
             "gunicorn",
             "main:app",
@@ -325,7 +328,6 @@ if __name__ == "__main__":
             "uvicorn.workers.UvicornWorker",
         ]
 
-        # Start the Gunicorn server
         subprocess.run(cmd, check=True)
 
     except subprocess.CalledProcessError as e:
