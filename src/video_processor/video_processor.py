@@ -47,7 +47,7 @@ class EnhancedVideoProcessor:
         self.ai_service = EnhancedGoogleGenerativeService()
 
         # Create output directories
-        self.output_dir = "processed_videos"
+        self.output_dir = settings.OUTPUT_DIR
         self.temp_dir = settings.TEMP_DIR
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.temp_dir, exist_ok=True)
@@ -474,7 +474,7 @@ class EnhancedVideoProcessor:
         score = 0
 
         # Resolution scoring (35 points)
-        quality_rating = video_info.get("quality", "Unknown")
+        quality_rating = video_info.get("quality_rating", "Unknown")
         resolution_scores = {
             "4K": 35,
             "1440p": 30,
