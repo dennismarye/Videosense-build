@@ -307,7 +307,7 @@ class TestEnhancedVideoProcessor:
                     "width": 1920,
                     "height": 1080,
                     "fps": 30,
-                    "quality": "1080p",
+                    "quality_rating": "1080p",
                     "orientation": "landscape",
                     "codec": "h264",
                     "bit_rate": 5000000,
