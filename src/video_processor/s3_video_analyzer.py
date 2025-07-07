@@ -3,6 +3,9 @@ import subprocess
 import json
 import os
 import logging
+import boto3
+from botocore.exceptions import ClientError
+from urllib.parse import urlparse
 import math
 from typing import Dict, Any, Optional, Tuple
 from typing import Dict, Any, Optional, Tuple, List
@@ -13,12 +16,88 @@ class S3VideoAnalyzer:
 
     def __init__(self, aws_access_key=None, aws_secret_key=None, region="us-east-1"):
         """Initialize the S3 Video Analyzer with optional AWS credentials"""
+        """Initialize the S3 Video Analyzer with optional AWS credentials"""
+        self.aws_access_key = aws_access_key
+        self.aws_secret_key = aws_secret_key
+        self.region = region
+
         if aws_access_key:
             os.environ["AWS_ACCESS_KEY_ID"] = aws_access_key
             os.environ["AWS_SECRET_ACCESS_KEY"] = aws_secret_key
             os.environ["AWS_DEFAULT_REGION"] = region
 
+        # Initialize S3 client for presigned URLs
+        try:
+            if aws_access_key and aws_secret_key:
+                self.s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=aws_access_key,
+                    aws_secret_access_key=aws_secret_key,
+                    region_name=region,
+                )
+            else:
+                self.s3_client = boto3.client("s3", region_name=region)
+        except Exception as e:
+            self.s3_client = None
+            print(f"Warning: Could not initialize S3 client: {e}")
+
         self.logger = logging.getLogger(__name__)
+
+    def _parse_s3_url(self, s3_url: str) -> Optional[Tuple[str, str]]:
+        """Parse S3 URL to extract bucket and key"""
+        try:
+            if s3_url.startswith("s3://"):
+                # s3://bucket/key format
+                parsed = urlparse(s3_url)
+                bucket = parsed.netloc
+                key = parsed.path.lstrip("/")
+                return bucket, key
+            elif "s3." in s3_url or "s3-" in s3_url:
+                # https://bucket.s3.region.amazonaws.com/key or https://s3.region.amazonaws.com/bucket/key
+                parsed = urlparse(s3_url)
+                path_parts = parsed.path.strip("/").split("/")
+
+                if parsed.netloc.startswith("s3.") or parsed.netloc.startswith("s3-"):
+                    # https://s3.region.amazonaws.com/bucket/key format
+                    bucket = path_parts[0]
+                    key = "/".join(path_parts[1:]) if len(path_parts) > 1 else ""
+                else:
+                    # https://bucket.s3.region.amazonaws.com/key format
+                    bucket = parsed.netloc.split(".")[0]
+                    key = parsed.path.lstrip("/")
+
+                return bucket, key
+            return None
+        except Exception as e:
+            self.logger.error(f"Error parsing S3 URL {s3_url}: {e}")
+            return None
+
+    def _get_presigned_url(self, s3_url: str) -> str:
+        """Convert S3 URL to presigned URL, or return original if not S3 or no credentials"""
+        # If not an S3 URL, return as-is
+        if not ("s3." in s3_url or "s3://" in s3_url):
+            return s3_url
+
+        # If no S3 client, return original URL (will work for public files)
+        if not self.s3_client:
+            return s3_url
+
+        try:
+            parsed = self._parse_s3_url(s3_url)
+            if not parsed:
+                return s3_url
+
+            bucket, key = parsed
+
+            # Generate presigned URL (1 hour expiry)
+            presigned_url = self.s3_client.generate_presigned_url(
+                "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
+            )
+            return presigned_url
+
+        except Exception as e:
+            self.logger.warning(f"Could not generate presigned URL for {s3_url}: {e}")
+            return s3_url  # Fallback to original URL
 
     def detect_video_quality(self, width: int, height: int) -> str:
         """
@@ -93,6 +172,7 @@ class S3VideoAnalyzer:
         """Get basic video information using ffmpeg.probe"""
         try:
             # Use correct ffmpeg-python syntax
+            accessible_url = self._get_presigned_url(s3_path)
             probe = ffmpeg.probe(s3_path, v="error")
             return probe
         except ffmpeg.Error as e:
@@ -105,6 +185,7 @@ class S3VideoAnalyzer:
     def get_detailed_info(self, s3_path: str) -> Optional[Dict[str, Any]]:
         """Get detailed video information with proper parsing"""
         try:
+            accessible_url = self._get_presigned_url(s3_path)
             probe = ffmpeg.probe(s3_path, v="error")
 
             # Extract and organize information
