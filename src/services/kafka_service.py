@@ -88,7 +88,7 @@ class EnhancedKafkaService:
                 "retries": 5,
                 "retry.backoff.ms": "1000",
                 "enable.idempotence": "true",  # Prevent duplicate messages
-                "compression.type": "snappy",  # Compress messages
+                "compression.type": "gzip",  # Compress messages
                 "batch.size": 16384,
                 "linger.ms": 5,  # Small delay to batch messages
             }

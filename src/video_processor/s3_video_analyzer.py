@@ -173,7 +173,7 @@ class S3VideoAnalyzer:
         try:
             # Use correct ffmpeg-python syntax
             accessible_url = self._get_presigned_url(s3_path)
-            probe = ffmpeg.probe(s3_path, v="error")
+            probe = ffmpeg.probe(accessible_url, v="error")
             return probe
         except ffmpeg.Error as e:
             self.logger.error(f"FFmpeg error probing {s3_path}: {e}")
@@ -186,7 +186,7 @@ class S3VideoAnalyzer:
         """Get detailed video information with proper parsing"""
         try:
             accessible_url = self._get_presigned_url(s3_path)
-            probe = ffmpeg.probe(s3_path, v="error")
+            probe = ffmpeg.probe(accessible_url, v="error")
 
             # Extract and organize information
             format_info = probe.get("format", {})
