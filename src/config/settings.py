@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # AI/ML Service Configuration
     SLACK_BOT_TOKEN: str
     GEMINI_KEY: str
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_TIMEOUT: int = 600
 
     # Slack Configuration
@@ -95,6 +95,8 @@ class Settings(BaseSettings):
     KAFKA_CONSUMER_TIMEOUT: float = 1.0
     KAFKA_PRODUCER_TIMEOUT: int = 10
     GEMINI_REQUEST_TIMEOUT: int = 600
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
 
     def get_supported_video_formats(self) -> list:
         """Get list of supported video formats"""

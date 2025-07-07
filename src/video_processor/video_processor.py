@@ -41,7 +41,11 @@ class EnhancedVideoProcessor:
 
     def __init__(self):
         # Initialize video analyzer for quality assessment
-        self.video_analyzer = S3VideoAnalyzer()
+        self.video_analyzer = S3VideoAnalyzer(
+            settings.AWS_SECRET_ACCESS_KEY,
+            settings.AWS_ACCESS_KEY_ID,
+            settings.AWS_REGION,
+        )
 
         # Initialize AI service for content analysis
         self.ai_service = EnhancedGoogleGenerativeService()
@@ -266,9 +270,12 @@ class EnhancedVideoProcessor:
         try:
             output_path = os.path.join(self.output_dir, f"{job_id}_processed.mp4")
 
+            # 🔥 KEY CHANGE: Convert to presigned URL before ffmpeg call
+            accessible_url = self.video_analyzer._get_presigned_url(video_url)
+
             # Use FFmpeg to download and compress video
             ffmpeg_cmd = (
-                ffmpeg.input(video_url)
+                ffmpeg.input(accessible_url)  # Use presigned URL here
                 .output(
                     output_path,
                     vf=f"scale={self.ffmpeg_quality['scale']},fps={self.ffmpeg_quality['fps']}",
