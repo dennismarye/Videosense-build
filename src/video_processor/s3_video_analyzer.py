@@ -63,7 +63,12 @@ class S3VideoAnalyzer:
                     key = "/".join(path_parts[1:]) if len(path_parts) > 1 else ""
                 else:
                     # https://bucket.s3.region.amazonaws.com/key format
-                    bucket = parsed.netloc.split(".")[0]
+                    # 🔥 FIX: Extract bucket name properly when it contains dots
+                    netloc = parsed.netloc
+                    if ".s3." in netloc:
+                        bucket = netloc.split(".s3.")[0]  # Get everything before .s3.
+                    else:
+                        bucket = netloc.split(".")[0]  # Fallback for simple names
                     key = parsed.path.lstrip("/")
 
                 return bucket, key
