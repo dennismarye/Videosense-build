@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     NODE_ENV: str
 
     # Kafka Topic Configuration
-    INPUT_TOPIC: str = "file.post_media_uploaded"
+    INPUT_TOPIC: str = "file.post_content_uploaded"
     # OUTPUT_TOPIC: str = "classify.post_classify"
 
     # Enhanced Video Classification Topics
