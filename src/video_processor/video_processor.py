@@ -42,8 +42,8 @@ class EnhancedVideoProcessor:
     def __init__(self):
         # Initialize video analyzer for quality assessment
         self.video_analyzer = S3VideoAnalyzer(
+            settings.AWS_ACCESS_KEY_ID,  # ✅ aws_access_key (first parameter)
             settings.AWS_SECRET_ACCESS_KEY,
-            settings.AWS_ACCESS_KEY_ID,
             settings.AWS_REGION,
         )
 
