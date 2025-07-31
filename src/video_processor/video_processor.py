@@ -103,7 +103,7 @@ class EnhancedVideoProcessor:
     def extract_video_files(self, circo_post: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract and validate video files from CircoPost media field"""
         try:
-            media_files = circo_post.get("media", [])
+            media_files = circo_post.get("files", [])
             video_files = []
 
             for media_item in media_files:
