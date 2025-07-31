@@ -273,6 +273,8 @@ class EnhancedVideoProcessor:
             # 🔥 KEY CHANGE: Convert to presigned URL before ffmpeg call
             accessible_url = self.video_analyzer._get_presigned_url(video_url)
 
+            logging.info(accessible_url)
+
             # Use FFmpeg to download and compress video
             ffmpeg_cmd = (
                 ffmpeg.input(accessible_url)  # Use presigned URL here
