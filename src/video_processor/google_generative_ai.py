@@ -521,7 +521,7 @@ Example:
     def _extract_video_info(self, circo_post: Dict[str, Any]) -> Dict[str, Any]:
         """Extract video information from CircoPost"""
         try:
-            media_files = circo_post.get("media", [])
+            media_files = circo_post.get("files", [])
             for media_item in media_files:
                 if media_item.get("fileType") == "Video":
                     return {

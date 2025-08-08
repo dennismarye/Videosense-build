@@ -31,180 +31,45 @@ REAL_VIDEO_URLS = [
     "https://s3.eu-west-2.amazonaws.com/prod.circleandclique.org/original-files/3f709071-42cc-467a-9d65-b7ebdaa3a237.mp4",
 ]
 
-# # Sample CircoPost with Comedy & Entertainment content (real data structure)
-# COMEDY_CIRCO_POST = {
-#     "id": "6810a82febe3d79ad2b053db",
-#     "reCircoCount": 15,
-#     "shareCount": 8,
-#     "commentCount": 32,
-#     "downloadCount": 5,
-#     "likesCount": 245,
-#     "happyCount": 89,
-#     "sadCount": 2,
-#     "heartCount": 156,
-#     "unAmusedCount": 4,
-#     "primaryCaption": "This had me rolling 😂😂 African parents be like... #comedy #funny #africanparents #viral",
-#     "postType": "POST",
-#     "format": "VIDEO",
-#     "secondaryCaption": "Comedy skit about African parenting styles",
-#     "tags": ["comedy", "entertainment", "viral", "african", "parents"],
-#     "categories": ["Comedy & Memes", "Entertainment & Afro-Centric"],
-#     "jobId": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8",
-#     "media": [
-#         {
-#             "id": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8",
-#             "name": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8.mp4",
-#             "bucket": "prod.circleandclique.org",
-#             "fileType": "Video",
-#             "acl": "public-read",
-#             "path": "original-files/48ae92f8-e304-43e8-b60b-00dec6c7b9c8.mp4",
-#             "original": REAL_VIDEO_URLS[1],
-#             "cachedOriginal": REAL_VIDEO_URLS[1],
-#             "version": 1,
-#             "isDeleted": False,
-#         }
-#     ],
-#     "version": 1,
-#     "isDeleted": False,
-#     "user": "comedy_creator_123",
-#     "locationData": {"country": "Nigeria", "state": "Lagos", "city": "Lagos"},
-#     "recircled": False,
-#     "userFollowing": False,
-# }
-
-
+# Sample CircoPost with Comedy & Entertainment content (real data structure)
 COMEDY_CIRCO_POST = {
-    "reCircoCount": 0,
-    "shareCount": 0,
-    "commentCount": 0,
-    "downloadCount": 0,
-    "likesCount": 0,
-    "happyCount": 0,
-    "sadCount": 0,
-    "passSafetyCheck": False,
-    "isPublished": False,
-    "heartCount": 0,
-    "unAmusedCount": 0,
-    "primaryCaption": "Signed url test",
-    "postType": "Video",
-    "format": "SUBSCRIPTION",
-    "abrMetadata": {
-        "outputs": [
-            {
-                "name": "240p",
-                "height": 240,
-                "width": 426,
-                "maxBitrate": 800000,
-                "audioSettings": {"bitrate": 64000, "sampleRate": 44100},
-            },
-            {
-                "name": "360p",
-                "height": 360,
-                "width": 640,
-                "maxBitrate": 1200000,
-                "audioSettings": {"bitrate": 96000, "sampleRate": 48000},
-            },
-            {
-                "name": "480p",
-                "height": 480,
-                "width": 854,
-                "maxBitrate": 1400000,
-                "audioSettings": {"bitrate": 96000, "sampleRate": 48000},
-            },
-            {
-                "name": "720p",
-                "height": 720,
-                "width": 1280,
-                "maxBitrate": 2800000,
-                "audioSettings": {"bitrate": 128000, "sampleRate": 48000},
-            },
-            {
-                "name": "1080p",
-                "height": 1080,
-                "width": 1920,
-                "maxBitrate": 5000000,
-                "audioSettings": {"bitrate": 192000, "sampleRate": 48000},
-                "conditions": {"requiresOneOf": ["PPV", "SUBSCRIPTION"]},
-            },
-        ],
-        "commonSettings": {
-            "container": "CMFC",
-            "videoCodec": "H_265",
-            "codecSettings": {
-                "rateControlMode": "QVBR",
-                "sceneChangeDetect": "TRANSITION_DETECTION",
-                "qualityTuningLevel": "MULTI_PASS_HQ",
-                "adaptiveQuantization": "HIGH",
-                "spatialAdaptiveQuantization": "ENABLED",
-                "temporalAdaptiveQuantization": "ENABLED",
-                "flickerAdaptiveQuantization": "ENABLED",
-            },
-            "manifestSettings": {
-                "hlsManifest": "ENABLED",
-                "dashManifest": "DISABLED",
-                "segmentLength": 10,
-                "fragmentLength": 2,
-            },
-            "s3Settings": {
-                "acl": "BUCKET_OWNER_FULL_CONTROL",
-                "storageClass": "STANDARD",
-            },
-        },
-    },
-    "tags": [],
-    "categories": [],
     "jobId": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8",
-    "media": [
+    "primaryCaption": "This had me rolling 😂😂 African parents be like... #comedy #funny #africanparents #viral",
+    "secondaryCaption": "Comedy skit about African parenting styles",
+    "tags": ["comedy", "entertainment", "viral", "african", "parents"],
+    "categories": ["Comedy & Memes", "Entertainment & Afro-Centric"],
+    "format": "POST",  # or "SUBSCRIPTION"
+    "files": [
         {
-            "name": "1eeacf9c-6151-4961-aba6-1bcca5450175.MP4",
-            "bucket": "app.circleandclique.org",
+            "id": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8",
+            "name": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8.mp4",
+            "bucket": "prod.circleandclique.org",
             "fileType": "Video",
-            "acl": "private",
-            "path": "1eeacf9c-6151-4961-aba6-1bcca5450175.MP4",
+            "acl": "public-read",
+            "path": "original-files/48ae92f8-e304-43e8-b60b-00dec6c7b9c8.mp4",
             "original": REAL_VIDEO_URLS[1],
-            "nestedFolder": False,
+            "cachedOriginal": REAL_VIDEO_URLS[1],
             "version": 1,
             "revision": 1,
             "isDeleted": False,
-            "id": "686bd66e4f65f9b792892398",
+            "nestedFolder": False,
+            "smallHsl": "",
+            "mediumHsl": "",
         }
     ],
-    "version": 0,
-    "revision": 1,
-    "user": "678e1c9f115d4a9e00bb3a4f",
-    "createdAt": "2025-07-07T13:24:18.179Z",
-    "updatedAt": "2025-07-07T13:33:38.693Z",
-    "__v": 1,
-    "id": "686bca823930aa71298b8e85",
-    "teaser": {
-        "name": "1eeacf9c-6151-4961-aba6-1bcca5450175.MP4",
-        "bucket": "app.circleandclique.org",
-        "fileType": "Video",
-        "acl": "private",
-        "path": "undefined",
-        "original": "https://s3.eu-west-2.amazonaws.com/dev-ppv.circleandclique.com/1eeacf9c-6151-4961-aba6-1bcca5450175.MP4",
-        "nestedFolder": False,
-        "version": 1,
-        "revision": 1,
-        "isDeleted": False,
-        "id": "686bd66e4f65f9b792892399",
-    },
-    "_kafka_metadata": {
-        "topic": "file.post_media_uploaded",
-        "partition": 0,
-        "offset": 1,
-        "key": None,
-        "timestamp": 1751897710795,
-    },
+    "version": 1,
+    "isDeleted": False,
+    "user": "comedy_creator_123",
+    "locationData": {"country": "Nigeria", "state": "Lagos", "city": "Lagos"},
 }
 
-# Sample CircoPost with Music & Dance content
+# Sample CircoPost with Music & Dance content (NEW STRUCTURE)
 MUSIC_DANCE_CIRCO_POST = {
-    "id": "6810a82febe3d79ad2b053dc",
-    "primaryCaption": "New Afrobeats dance challenge! 🔥💃 Who's trying this? #afrobeats #dance #challenge #viral",
     "jobId": "a605cfcf-82dc-436f-939f-87d19ca4d100",
-    "media": [
-        {
+    "primaryCaption": "New Afrobeats dance challenge! 🔥💃 Who's trying this? #afrobeats #dance #challenge #viral",
+    "format": "POST",
+    "files": [
+        {  # ✅ Changed from "media" to "files"
             "id": "a605cfcf-82dc-436f-939f-87d19ca4d100",
             "name": "a605cfcf-82dc-436f-939f-87d19ca4d100.mp4",
             "bucket": "app.circleandclique.org",
@@ -214,7 +79,11 @@ MUSIC_DANCE_CIRCO_POST = {
             "original": REAL_VIDEO_URLS[0],
             "cachedOriginal": REAL_VIDEO_URLS[0],
             "version": 1,
+            "revision": 1,
             "isDeleted": False,
+            "nestedFolder": False,
+            "smallHsl": "",
+            "mediumHsl": "",
         }
     ],
     "version": 1,
@@ -222,13 +91,13 @@ MUSIC_DANCE_CIRCO_POST = {
     "user": "dance_influencer_456",
 }
 
-# Sample CircoPost with Motivational content
+# Sample CircoPost with Motivational content (NEW STRUCTURE)
 MOTIVATION_CIRCO_POST = {
-    "id": "6810a82febe3d79ad2b053dd",
-    "primaryCaption": "Monday motivation! 💪 Your dreams are valid, keep pushing! #motivation #success #mindset #entrepreneur",
     "jobId": "3f709071-42cc-467a-9d65-b7ebdaa3a237",
-    "media": [
-        {
+    "primaryCaption": "Monday motivation! 💪 Your dreams are valid, keep pushing! #motivation #success #mindset #entrepreneur",
+    "format": "POST",
+    "files": [
+        {  # ✅ Changed from "media" to "files"
             "id": "3f709071-42cc-467a-9d65-b7ebdaa3a237",
             "name": "3f709071-42cc-467a-9d65-b7ebdaa3a237.mp4",
             "bucket": "prod.circleandclique.org",
@@ -238,7 +107,11 @@ MOTIVATION_CIRCO_POST = {
             "original": REAL_VIDEO_URLS[4],
             "cachedOriginal": REAL_VIDEO_URLS[4],
             "version": 1,
+            "revision": 1,
             "isDeleted": False,
+            "nestedFolder": False,
+            "smallHsl": "",
+            "mediumHsl": "",
         }
     ],
     "version": 1,
@@ -246,13 +119,13 @@ MOTIVATION_CIRCO_POST = {
     "user": "motivational_speaker_789",
 }
 
-# Sample CircoPost with Sports & Fitness content
+# Sample CircoPost with Sports & Fitness content (NEW STRUCTURE)
 SPORTS_FITNESS_CIRCO_POST = {
-    "id": "6810a82febe3d79ad2b053de",
-    "primaryCaption": "Quick 10-minute home workout! No equipment needed 💪 #fitness #workout #homegym #health",
     "jobId": "13bd6ed1-a51c-4c6b-ade4-826d9f013e24",
-    "media": [
-        {
+    "primaryCaption": "Quick 10-minute home workout! No equipment needed 💪 #fitness #workout #homegym #health",
+    "format": "POST",
+    "files": [
+        {  # ✅ Changed from "media" to "files"
             "id": "13bd6ed1-a51c-4c6b-ade4-826d9f013e24",
             "name": "13bd6ed1-a51c-4c6b-ade4-826d9f013e24.mp4",
             "bucket": "prod.circleandclique.org",
@@ -262,7 +135,11 @@ SPORTS_FITNESS_CIRCO_POST = {
             "original": "https://s3.eu-west-2.amazonaws.com/prod.circleandclique.org/original-files/13bd6ed1-a51c-4c6b-ade4-826d9f013e24.mp4",
             "cachedOriginal": "https://s3.eu-west-2.amazonaws.com/prod.circleandclique.org/original-files/13bd6ed1-a51c-4c6b-ade4-826d9f013e24.mp4",
             "version": 1,
+            "revision": 1,
             "isDeleted": False,
+            "nestedFolder": False,
+            "smallHsl": "",
+            "mediumHsl": "",
         }
     ],
     "version": 1,
@@ -270,13 +147,13 @@ SPORTS_FITNESS_CIRCO_POST = {
     "user": "fitness_trainer_321",
 }
 
-# Sample CircoPost with Travel content
+# Sample CircoPost with Travel content (NEW STRUCTURE)
 TRAVEL_CIRCO_POST = {
-    "id": "6810a82febe3d79ad2b053df",
-    "primaryCaption": "Hidden gems of Lagos! 🌟 These spots will blow your mind #travel #lagos #nigeria #adventure #explore",
     "jobId": "5a2b8c17-ca90-46e2-9c5b-80e024256e77",
-    "media": [
-        {
+    "primaryCaption": "Hidden gems of Lagos! 🌟 These spots will blow your mind #travel #lagos #nigeria #adventure #explore",
+    "format": "POST",
+    "files": [
+        {  # ✅ Changed from "media" to "files"
             "id": "5a2b8c17-ca90-46e2-9c5b-80e024256e77",
             "name": "5a2b8c17-ca90-46e2-9c5b-80e024256e77.mp4",
             "bucket": "prod.circleandclique.org",
@@ -286,7 +163,11 @@ TRAVEL_CIRCO_POST = {
             "original": REAL_VIDEO_URLS[3],
             "cachedOriginal": REAL_VIDEO_URLS[3],
             "version": 1,
+            "revision": 1,
             "isDeleted": False,
+            "nestedFolder": False,
+            "smallHsl": "",
+            "mediumHsl": "",
         }
     ],
     "version": 1,
@@ -341,12 +222,13 @@ class TestEnhancedVideoProcessor:
 
         assert len(video_files) == 1
         assert video_files[0]["fileType"] == "Video"
-        assert video_files[0]["name"] == "1eeacf9c-6151-4961-aba6-1bcca5450175.MP4"
+        # Now this will match the test data
+        assert video_files[0]["name"] == "48ae92f8-e304-43e8-b60b-00dec6c7b9c8.mp4"
         assert video_files[0]["original"] == REAL_VIDEO_URLS[1]
 
     def test_extract_video_files_empty_media(self, processor):
         """Test extraction with empty media array"""
-        empty_post = {"media": []}
+        empty_post = {"files": []}
         video_files = processor.extract_video_files(empty_post)
 
         assert len(video_files) == 0
@@ -380,7 +262,7 @@ class TestEnhancedVideoProcessor:
     @pytest.mark.asyncio
     async def test_process_safety_and_tagging_no_videos(self, processor):
         """Test safety check when no videos are present"""
-        empty_post = {"media": [], "jobId": "test-no-videos"}
+        empty_post = {"files": [], "jobId": "test-no-videos"}
         result = await processor.process_safety_and_tagging(empty_post)
 
         assert result is not None

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     MICROSERVICE_CLIENTID: str
     MICROSERVICE_GROUPID: str
     KAFKA_ADMIN_CLIENT: str
+
     AWS_REGION: str
     WORKERS: int
     KAFKA_USERNAME: str
@@ -35,7 +36,7 @@ class Settings(BaseSettings):
     NODE_ENV: str
 
     # Kafka Topic Configuration
-    INPUT_TOPIC: str = "file.post_content_uploaded"
+    INPUT_TOPIC: str = "classification.moderate_post"
     # OUTPUT_TOPIC: str = "classify.post_classify"
 
     # Enhanced Video Classification Topics
