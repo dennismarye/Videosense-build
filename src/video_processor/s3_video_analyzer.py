@@ -7,7 +7,6 @@ import boto3
 from botocore.exceptions import ClientError
 from urllib.parse import urlparse
 import math
-from typing import Dict, Any, Optional, Tuple
 from typing import Dict, Any, Optional, Tuple, List
 
 
