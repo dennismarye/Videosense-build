@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-    - dev
+    - qa-testing
 
 jobs:
   build-and-deploy:
@@ -23,18 +23,18 @@ jobs:
     # Build Docker image
     - name: Build Docker Image
       run: |
-        docker build -t dev-video-classification .
+        docker build -t qa-video-classification .
 
     - name: Log in to Amazon ECR
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Tag Docker image
       run: |
-        docker tag dev-video-classification:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
+        docker tag qa-video-classification:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/qa-video-classification:latest
 
     - name: Push Docker image to ECR
       run: |
-        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
+        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/qa-video-classification:latest
 
     - name: Deploy to EC2
       env:
@@ -47,6 +47,6 @@ jobs:
         chmod 400 /tmp/ec2_key.pem
 
         ssh -o StrictHostKeyChecking=no -i /tmp/ec2_key.pem ${EC2_USER}@${EC2_HOST} << 'EOF'
-          cd /home/ubuntu/dev-circo/dev-video-classification/
+          cd /home/ubuntu/qa-circo/qa-video-classification/
           sudo ./deploy.sh
         EOF
