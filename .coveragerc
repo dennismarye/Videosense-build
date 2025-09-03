@@ -1,0 +1,32 @@
+[run]
+source = src,.
+omit =
+    */tests/*
+    */venv/*
+    */__pycache__/*
+    */.pytest_cache/*
+    */node_modules/*
+    .coveragerc
+    .dockerignore
+    .gitignore
+    Dockerfile
+    entrypoint.sh
+    Jenkinsfile-sandbox
+    Jenkinsfile-prod
+    requirements.txt
+    sonar-project.properties
+    README.md
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+[paths]
+source =
+    src
+    .
+
+[xml]
+output = coverage.xml

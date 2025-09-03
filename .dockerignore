@@ -18,14 +18,50 @@ yarn-error.log
 yarn.lock
 
 # Ignore Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.env
+.venv
+venv/
+ENV/
+.coverage
+htmlcov/
+temp_processed/
+.pytest_cache/
+myenv/
+src/config/.env
+.pre-commit-config.yaml
+compressed_videos
+merged_videos
+appenv
+.mypy_cache
 __pycache__
+.DS_Store
+.vscode
+.vscode*
+vscode*
+*.__pycache__
 *.pyc
 *.pyo
 *.pyd
-env/
-venv/
-*.egg-info
-*.egg
 
 # Ignore Java build directories
 target/
@@ -85,3 +121,5 @@ tmp/
 
 Jenkinsfile-sandbox
 Jenkinsfile-prod
+kafka.pem
+.env
