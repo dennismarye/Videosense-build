@@ -35,6 +35,7 @@ REAL_VIDEO_URLS = [
 COMEDY_CIRCO_POST = {
     "jobId": "48ae92f8-e304-43e8-b60b-00dec6c7b9c8",
     "primaryCaption": "This had me rolling 😂😂 African parents be like... #comedy #funny #africanparents #viral",
+    "title": "African Parents Be Like",
     "secondaryCaption": "Comedy skit about African parenting styles",
     "tags": ["comedy", "entertainment", "viral", "african", "parents"],
     "categories": ["Comedy & Memes", "Entertainment & Afro-Centric"],
@@ -67,6 +68,7 @@ COMEDY_CIRCO_POST = {
 MUSIC_DANCE_CIRCO_POST = {
     "jobId": "a605cfcf-82dc-436f-939f-87d19ca4d100",
     "primaryCaption": "New Afrobeats dance challenge! 🔥💃 Who's trying this? #afrobeats #dance #challenge #viral",
+    "title": "Afrobeats Dance Challenge",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
@@ -91,11 +93,13 @@ MUSIC_DANCE_CIRCO_POST = {
     "user": "dance_influencer_456",
 }
 
+
 # Sample CircoPost with Motivational content (NEW STRUCTURE)
 MOTIVATION_CIRCO_POST = {
     "jobId": "3f709071-42cc-467a-9d65-b7ebdaa3a237",
     "primaryCaption": "Monday motivation! 💪 Your dreams are valid, keep pushing! #motivation #success #mindset #entrepreneur",
     "format": "POST",
+    "title": "Monday Motivation",
     "files": [
         {  # ✅ Changed from "media" to "files"
             "id": "3f709071-42cc-467a-9d65-b7ebdaa3a237",
@@ -123,6 +127,7 @@ MOTIVATION_CIRCO_POST = {
 SPORTS_FITNESS_CIRCO_POST = {
     "jobId": "13bd6ed1-a51c-4c6b-ade4-826d9f013e24",
     "primaryCaption": "Quick 10-minute home workout! No equipment needed 💪 #fitness #workout #homegym #health",
+    "title": "10-Minute Home Workout",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
@@ -151,6 +156,7 @@ SPORTS_FITNESS_CIRCO_POST = {
 TRAVEL_CIRCO_POST = {
     "jobId": "5a2b8c17-ca90-46e2-9c5b-80e024256e77",
     "primaryCaption": "Hidden gems of Lagos! 🌟 These spots will blow your mind #travel #lagos #nigeria #adventure #explore",
+    "title": "Hidden Gems of Lagos",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
