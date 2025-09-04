@@ -352,7 +352,7 @@ class EnhancedVideoProcessor:
             quality_result = await self.analyze_video_quality(video_url)
 
             # Description Analysis - use AI context from Stage 1
-            user_title = circo_post.get("title", "")
+            user_title = circo_post.get("secondaryCaption", "")
             user_caption = circo_post.get("primaryCaption", "")
             total_description = f"{user_title}\n{user_caption}".strip()
             if ai_context:
