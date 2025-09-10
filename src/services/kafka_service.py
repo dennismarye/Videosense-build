@@ -21,9 +21,9 @@ logging.basicConfig(
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
-class EnhancedKafkaService:
+class KafkaService:
     """
-    Enhanced Kafka Service with multi-topic support for video classification workflow
+    Kafka Service with multi-topic support for video classification workflow
     """
 
     def __init__(self):
@@ -439,7 +439,3 @@ class EnhancedKafkaService:
         import time
 
         return int(time.time() * 1000)
-
-
-# Backward compatibility - alias for the original KafkaService
-KafkaService = EnhancedKafkaService

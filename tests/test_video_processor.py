@@ -67,6 +67,7 @@ COMEDY_CIRCO_POST = {
 MUSIC_DANCE_CIRCO_POST = {
     "jobId": "a605cfcf-82dc-436f-939f-87d19ca4d100",
     "primaryCaption": "New Afrobeats dance challenge! 🔥💃 Who's trying this? #afrobeats #dance #challenge #viral",
+    "secondaryCaption": "New Afrobeats dance challenge!",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
@@ -91,10 +92,12 @@ MUSIC_DANCE_CIRCO_POST = {
     "user": "dance_influencer_456",
 }
 
+
 # Sample CircoPost with Motivational content (NEW STRUCTURE)
 MOTIVATION_CIRCO_POST = {
     "jobId": "3f709071-42cc-467a-9d65-b7ebdaa3a237",
     "primaryCaption": "Monday motivation! 💪 Your dreams are valid, keep pushing! #motivation #success #mindset #entrepreneur",
+    "secondaryCaption": "Monday motivation! 💪 Your dreams are valid!",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
@@ -123,6 +126,7 @@ MOTIVATION_CIRCO_POST = {
 SPORTS_FITNESS_CIRCO_POST = {
     "jobId": "13bd6ed1-a51c-4c6b-ade4-826d9f013e24",
     "primaryCaption": "Quick 10-minute home workout! No equipment needed 💪 #fitness #workout #homegym #health",
+    "secondaryCaption": "Quick 10-minute home workout",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
@@ -151,6 +155,7 @@ SPORTS_FITNESS_CIRCO_POST = {
 TRAVEL_CIRCO_POST = {
     "jobId": "5a2b8c17-ca90-46e2-9c5b-80e024256e77",
     "primaryCaption": "Hidden gems of Lagos! 🌟 These spots will blow your mind #travel #lagos #nigeria #adventure #explore",
+    "secondaryCaption": "Hidden gems of Lagos!",
     "format": "POST",
     "files": [
         {  # ✅ Changed from "media" to "files"
