@@ -42,3 +42,19 @@ vscode*
 *.pyc
 *.pyo
 *.pyd
+newrelic.ini
+./newrelic*
+newrelic.*
+./newrelic.ini
+kafka.pem
+*.pem
+*.crt
+*.key
+coverage.xml
+# All log files
+*.log
+
+# Log directories
+logs/
+log/
+*.json
