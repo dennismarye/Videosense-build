@@ -6,7 +6,8 @@ import logging
 import re
 from typing import Dict, List, Optional, Any
 
-from google import genai  # New SDK import
+from google import genai
+from google.genai import types  # Import types module
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -74,6 +75,23 @@ class EnhancedGoogleGenerativeService:
             "timeout": self.timeout,
         }
 
+    def _get_mime_type_from_path(self, file_path: str) -> str:
+        """Detect MIME type from file extension"""
+        import mimetypes
+
+        mime_type, _ = mimetypes.guess_type(file_path)
+
+        # Default to video/mp4 if detection fails
+        if not mime_type:
+            if file_path.lower().endswith(".mov"):
+                return "video/quicktime"
+            elif file_path.lower().endswith(".avi"):
+                return "video/x-msvideo"
+            else:
+                return "video/mp4"
+
+        return mime_type
+
     async def analyze_video_safety_and_tags(
         self, video_path: str, circo_post: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -92,9 +110,11 @@ class EnhancedGoogleGenerativeService:
 
             # Upload video to Gemini using new SDK
             video_file = self.client.files.upload(path=video_path)
-            logging.info(f"Uploaded video file: {video_file.name}")
+            logging.info(
+                f"Uploaded video file: {video_file.name}, URI: {video_file.uri}"
+            )
 
-            # Wait for processing
+            # Wait for processing - the file state is a string directly
             while video_file.state == "PROCESSING":
                 await asyncio.sleep(10)
                 video_file = self.client.files.get(name=video_file.name)
@@ -105,11 +125,17 @@ class EnhancedGoogleGenerativeService:
             # Combined safety and tagging prompt
             prompt = self.get_combined_safety_tagging_prompt()
 
-            # Generate content using new SDK
+            # Detect mime type from the video path
+            mime_type = self._get_mime_type_from_path(video_path)
+            logging.info(f"Detected MIME type: {mime_type}")
+
+            # Generate content using new SDK with proper types
             result = self.client.models.generate_content(
                 model=self.model_name,
-                contents=[video_file, "\n\n", prompt],
-                config={"timeout": self.timeout},
+                contents=[
+                    types.Part.from_uri(file_uri=video_file.uri, mime_type=mime_type),
+                    prompt,
+                ],
             )
 
             if not result or not result.text:
@@ -263,7 +289,7 @@ class EnhancedGoogleGenerativeService:
 
             # Generate content using new SDK
             result = self.client.models.generate_content(
-                model=self.model_name, contents=prompt, config={"timeout": 300}
+                model=self.model_name, contents=prompt
             )
 
             if not result or not result.text:
@@ -570,7 +596,6 @@ Example:
             test_result = self.client.models.generate_content(
                 model=self.model_name,
                 contents="Respond with exactly: 'AI service test successful'",
-                config={"timeout": 30},
             )
 
             return {
