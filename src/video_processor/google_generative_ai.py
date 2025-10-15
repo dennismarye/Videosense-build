@@ -91,7 +91,7 @@ class EnhancedGoogleGenerativeService:
             job_id = circo_post.get("jobId", "unknown")
 
             # Upload video to Gemini using new SDK
-            video_file = self.client.files.upload(file=video_path)
+            video_file = self.client.files.upload(path=video_path)
             logging.info(f"Uploaded video file: {video_file.name}")
 
             # Wait for processing
