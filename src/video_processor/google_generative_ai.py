@@ -4,10 +4,10 @@ import asyncio
 import json
 import logging
 import re
+import json
 from typing import Dict, List, Optional, Any
 
-from google import genai
-from google.genai import types  # Import types module
+import google.generativeai as genai
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -30,13 +30,12 @@ class EnhancedGoogleGenerativeService:
     """Enhanced Google Generative AI Service for video analysis, safety checks, and content tagging"""
 
     def __init__(self):
-        # Initialize Gemini AI with new SDK
+        # Initialize Gemini AI
         self.gemini_key = settings.GEMINI_KEY
         if not self.gemini_key:
             raise ValueError("GEMINI_KEY environment variable is not set")
 
-        # Create the new genai client
-        self.client = genai.Client(api_key=self.gemini_key)
+        genai.configure(api_key=self.gemini_key)
         self.model_name = settings.GEMINI_MODEL
         self.timeout = settings.GEMINI_TIMEOUT
 
@@ -53,8 +52,8 @@ class EnhancedGoogleGenerativeService:
     def get_health_status(self) -> Dict[str, Any]:
         """Get health status of the AI service"""
         try:
-            # Test Gemini connection with new SDK
-            models = self.client.models.list()
+            # Test Gemini connection
+            genai.list_models()
             gemini_status = "healthy"
         except Exception as e:
             logging.error(f"Gemini AI health check failed: {e}")
@@ -75,23 +74,6 @@ class EnhancedGoogleGenerativeService:
             "timeout": self.timeout,
         }
 
-    def _get_mime_type_from_path(self, file_path: str) -> str:
-        """Detect MIME type from file extension"""
-        import mimetypes
-
-        mime_type, _ = mimetypes.guess_type(file_path)
-
-        # Default to video/mp4 if detection fails
-        if not mime_type:
-            if file_path.lower().endswith(".mov"):
-                return "video/quicktime"
-            elif file_path.lower().endswith(".avi"):
-                return "video/x-msvideo"
-            else:
-                return "video/mp4"
-
-        return mime_type
-
     async def analyze_video_safety_and_tags(
         self, video_path: str, circo_post: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -108,52 +90,41 @@ class EnhancedGoogleGenerativeService:
         try:
             job_id = circo_post.get("jobId", "unknown")
 
-            # Upload video to Gemini using new SDK
-            video_file = self.client.files.upload(path=video_path)
-            logging.info(
-                f"Uploaded video file: {video_file.name}, URI: {video_file.uri}"
-            )
+            # Upload video to Gemini
+            video_file = genai.upload_file(video_path)
 
-            # Wait for processing - the file state is a string directly
-            while video_file.state == "PROCESSING":
+            # Wait for processing
+            while video_file.state.name == "PROCESSING":
                 await asyncio.sleep(10)
-                video_file = self.client.files.get(name=video_file.name)
+                video_file = genai.get_file(video_file.name)
 
-            if video_file.state == "FAILED":
+            if video_file.state.name == "FAILED":
                 raise ValueError("Gemini video processing failed")
 
             # Combined safety and tagging prompt
             prompt = self.get_combined_safety_tagging_prompt()
 
-            # Detect mime type from the video path
-            mime_type = self._get_mime_type_from_path(video_path)
-            logging.info(f"Detected MIME type: {mime_type}")
-
-            # Generate content using new SDK with proper types
-            result = self.client.models.generate_content(
-                model=self.model_name,
-                contents=[
-                    types.Part.from_uri(file_uri=video_file.uri, mime_type=mime_type),
-                    prompt,
-                ],
+            model = genai.GenerativeModel(model_name=self.model_name)
+            response = model.generate_content(
+                [video_file, prompt], request_options={"timeout": self.timeout}
             )
 
-            if not result or not result.text:
+            if not response or not response.text:
                 raise ValueError("No response from Gemini AI")
 
-            logging.info(f"Received response from Gemini: {result.text[:200]}...")
+            print(response.text)  # Debugging line to see the response
 
             # Parse JSON response
             try:
                 analysis_result = (
                     await EnhancedGoogleGenerativeService.extract_json_from_response(
-                        result.text
+                        response.text
                     )
                 )
             except json.JSONDecodeError:
                 # Fallback if response is not JSON
                 logging.warning(
-                    f"Invalid JSON response from Gemini: {result.text[:200]}..."
+                    f"Invalid JSON response from Gemini: {response.text[:200]}..."
                 )
                 analysis_result = {
                     "safety_check": {
@@ -161,11 +132,13 @@ class EnhancedGoogleGenerativeService:
                         "reason": "Invalid AI response format",
                     },
                     "tags": [],
-                    "aiContext": result.text if result.text else "No context available",
+                    "aiContext": (
+                        response.text if response.text else "No context available"
+                    ),
                 }
 
             # Ensure proper structure and add metadata
-            response = {
+            result = {
                 "jobId": job_id,
                 "safety_check": analysis_result.get(
                     "safety_check",
@@ -187,7 +160,7 @@ class EnhancedGoogleGenerativeService:
             logging.info(
                 f"Successfully analyzed video safety and tags for job {job_id}"
             )
-            return response
+            return result
 
         except Exception as e:
             logging.error(f"Error in Gemini safety and tag analysis: {e}")
@@ -226,7 +199,7 @@ class EnhancedGoogleGenerativeService:
         if match:
             try:
                 json_content = match.group(1)
-                if json_content:
+                if json_content:  # Fix: Check if match group is not None
                     return json.loads(json_content)
             except json.JSONDecodeError:
                 pass
@@ -287,18 +260,16 @@ class EnhancedGoogleGenerativeService:
             # Description alignment prompt
             prompt = self.get_description_alignment_prompt(user_caption, ai_context)
 
-            # Generate content using new SDK
-            result = self.client.models.generate_content(
-                model=self.model_name, contents=prompt
-            )
+            model = genai.GenerativeModel(model_name=self.model_name)
+            response = model.generate_content(prompt, request_options={"timeout": 300})
 
-            if not result or not result.text:
+            if not response or not response.text:
                 raise ValueError("No response from Gemini AI")
 
             try:
                 alignment_result = (
                     await EnhancedGoogleGenerativeService.extract_json_from_response(
-                        result.text
+                        response.text
                     )
                 )
 
@@ -317,7 +288,7 @@ class EnhancedGoogleGenerativeService:
             except json.JSONDecodeError:
                 # Fallback scoring if JSON parsing fails
                 logging.warning(
-                    f"Invalid JSON response for description alignment: {result.text[:200]}..."
+                    f"Invalid JSON response for description alignment: {response.text[:200]}..."
                 )
                 return {
                     "alignmentScore": 50,
@@ -588,21 +559,26 @@ Example:
     async def test_ai_connection(self) -> Dict[str, Any]:
         """Test the AI service connection and capabilities"""
         try:
-            # Test model listing with new SDK
-            models = self.client.models.list()
-            available_models = [model.name for model in models]
+            # Test model listing
+            models = genai.list_models()
+            available_models = [
+                model.name
+                for model in models
+                if "generateContent" in model.supported_generation_methods
+            ]
 
             # Test a simple content generation
-            test_result = self.client.models.generate_content(
-                model=self.model_name,
-                contents="Respond with exactly: 'AI service test successful'",
+            model = genai.GenerativeModel(model_name=self.model_name)
+            test_response = model.generate_content(
+                "Respond with exactly: 'AI service test successful'",
+                request_options={"timeout": 30},
             )
 
             return {
                 "status": "healthy",
                 "model": self.model_name,
                 "available_models": available_models[:5],  # Limit to first 5
-                "test_response": test_result.text if test_result else "No response",
+                "test_response": test_response.text if test_response else "No response",
                 "timestamp": int(time.time()),
             }
 
