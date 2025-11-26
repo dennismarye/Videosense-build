@@ -10,43 +10,127 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up AWS CLI
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    # Build Docker image
-    - name: Build Docker Image
-      run: |
-        docker build -t dev-video-classification .
+      # Build Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t dev-video-classification .
 
-    - name: Log in to Amazon ECR
-      uses: aws-actions/amazon-ecr-login@v1
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Tag Docker image
-      run: |
-        docker tag dev-video-classification:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
+      - name: Tag Docker image
+        run: |
+          docker tag dev-video-classification:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
 
-    - name: Push Docker image to ECR
-      run: |
-        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
+      - name: Push Docker image to ECR
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/dev-video-classification:latest
 
-    - name: Deploy to EC2
-      env:
-        EC2_USER: ${{ secrets.EC2_USER }}
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-      run: |
-        set -euo pipefail
-        trap 'rm -f /tmp/ec2_key.pem' EXIT
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > /tmp/ec2_key.pem
-        chmod 400 /tmp/ec2_key.pem
+      - name: Trigger deploy and wait for completion
+        run: |
+          set -euo pipefail
 
-        ssh -o StrictHostKeyChecking=no -i /tmp/ec2_key.pem ${EC2_USER}@${EC2_HOST} << 'EOF'
-          cd /home/ubuntu/dev-circo/dev-video-classification/
-          sudo ./deploy.sh
-        EOF
+          COMMAND_ID=$(aws ssm send-command \
+            --region eu-west-2 \
+            --instance-ids "${{ secrets.DEV_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Triggering deployment via GitHub Actions" \
+            --parameters '{"commands":["sudo -u ubuntu bash -c \"cd /home/ubuntu/dev-circo/dev-video-classification/ && bash deploy.sh\""]}' \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          # Custom polling loop with extended timeout
+          echo "Waiting for command to finish..."
+          MAX_ATTEMPTS=60  # 60 attempts
+          DELAY=10          # 10 seconds between attempts (total 10 minutes max)
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            echo "Checking status... (Attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            
+            STATUS=$(aws ssm get-command-invocation \
+              --region eu-west-2 \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ secrets.DEV_INSTANCE_ID }}" \
+              --query "Status" \
+              --output text 2>/dev/null || echo "Pending")
+            
+            echo "Current status: $STATUS"
+            
+            case "$STATUS" in
+              Success)
+                echo "Command completed successfully!"
+                break
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "Command failed with status: $STATUS"
+                
+                # Fetch and display the error details
+                INVOCATION=$(aws ssm get-command-invocation \
+                  --region eu-west-2 \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "${{ secrets.DEV_INSTANCE_ID }}" \
+                  --output json)
+                
+                echo "$INVOCATION" | tee ssm_output.txt
+                
+                # Show error output if available
+                echo "Error output:"
+                echo "$INVOCATION" | jq -r '.StandardErrorContent // "No error output"'
+                
+                exit 1
+                ;;
+              InProgress|Pending|Delayed)
+                if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+                  echo "Timeout: Command still in progress after $((MAX_ATTEMPTS * DELAY)) seconds"
+                  
+                  # Fetch current state for debugging
+                  INVOCATION=$(aws ssm get-command-invocation \
+                    --region eu-west-2 \
+                    --command-id "$COMMAND_ID" \
+                    --instance-id "${{ secrets.DEV_INSTANCE_ID }}" \
+                    --output json)
+                  
+                  echo "$INVOCATION" | tee ssm_output.txt
+                  exit 1
+                fi
+                
+                sleep $DELAY
+                ;;
+              *)
+                echo "Unknown status: $STATUS"
+                sleep $DELAY
+                ;;
+            esac
+          done
+
+          # Fetch final command result
+          echo "Fetching command result..."
+          INVOCATION=$(aws ssm get-command-invocation \
+            --region eu-west-2 \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ secrets.DEV_INSTANCE_ID }}" \
+            --output json)
+
+          echo "$INVOCATION" | tee ssm_output.txt
+
+          # Display the output
+          echo "Command output:"
+          echo "$INVOCATION" | jq -r '.StandardOutputContent // "No output"'
+
+          STATUS=$(echo "$INVOCATION" | jq -r '.Status')
+          echo "Final command status: $STATUS"
