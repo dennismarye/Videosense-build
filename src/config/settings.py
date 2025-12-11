@@ -43,10 +43,14 @@ class Settings(BaseSettings):
     SAFETY_OUTPUT_TOPIC: str = "classification.safety_check_passed"
     QUALITY_OUTPUT_TOPIC: str = "classification.quality_analysis"
 
+    # Video Fragmentation Topics
+    FRAGMENT_OUTPUT_TOPIC: str = "fragmentation.fragments_ready"
+
     # Directories
     OUTPUT_DIR: str = "compressed_videos"
     MERGED_OUTPUT_DIR: str = "merged_videos"
     TEMP_DIR: str = "/tmp/video_processing"
+    FRAGMENTATION_TEMP_DIR: str = "/tmp/video_fragmentation"
 
     # Server Configuration
     SERVER_HOST: str
@@ -91,6 +95,25 @@ class Settings(BaseSettings):
     ENABLE_DESCRIPTION_ANALYSIS: bool = True
     ENABLE_SLACK_NOTIFICATIONS: bool = True
     ENABLE_CONTENT_MODERATION: bool = True
+    ENABLE_VIDEO_FRAGMENTATION: bool = True
+
+    # Video Fragmentation Configuration
+    FRAGMENT_SAFETY_THRESHOLD: int = 85
+    FRAGMENT_ALLOWED_DURATIONS: list = [90, 180, 360]
+    FRAGMENT_DEFAULT_DURATION: int = 180
+
+    @property
+    def FRAGMENTATION_OUTPUT_BUCKET(self) -> str:
+        """
+        Get S3 bucket based on environment
+        - development, qa, staging → app.circleandclique.org
+        - production → prod.circleandclique.org
+        """
+        if self.NODE_ENV.lower() == "production":
+            return "prod.circleandclique.org"
+        else:
+            # dev, qa, staging all use the same bucket
+            return "app.circleandclique.org"
 
     # Performance Configuration
     KAFKA_CONSUMER_TIMEOUT: float = 1.0
