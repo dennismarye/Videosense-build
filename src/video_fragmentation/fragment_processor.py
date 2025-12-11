@@ -2,6 +2,7 @@ import logging
 import asyncio
 import os
 import time
+import ffmpeg
 from typing import Dict, List, Any, Optional
 
 from src.config.settings import settings
@@ -251,9 +252,6 @@ class FragmentProcessor:
             presigned_url = self.video_analyzer._get_presigned_url(video_url)
 
             logger.info(f"Downloading video to {local_path}")
-
-            # Download using ffmpeg (reuse existing logic)
-            import ffmpeg
 
             ffmpeg.input(presigned_url).output(
                 local_path, codec="copy"
