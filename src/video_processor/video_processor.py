@@ -352,15 +352,23 @@ class EnhancedVideoProcessor:
             quality_result = await self.analyze_video_quality(video_url)
 
             # Description Analysis - use AI context from Stage 1
-            user_title = circo_post.get("secondaryCaption", "")
-            user_caption = circo_post.get("primaryCaption", "")
-            total_description = f"{user_title}\n{user_caption}".strip()
-            if ai_context:
+            # Extract description from optional fields (title, secondaryCaption, primaryCaption, description)
+            total_description = self._extract_description_text(circo_post)
+
+            if ai_context and total_description:
                 description_result = (
                     await self.ai_service.analyze_description_alignment(
                         total_description, ai_context
                     )
                 )
+            elif not total_description:
+                logging.info("No description provided for description analysis")
+                description_result = {
+                    "alignmentScore": 0,
+                    "alignmentLevel": "N/A",
+                    "justification": "No description provided",
+                    "suggestion": "Add a description to enable alignment analysis",
+                }
             else:
                 logging.warning("No AI context provided for description analysis")
                 description_result = {
@@ -621,6 +629,38 @@ class EnhancedVideoProcessor:
             or primary_video.get("cachedOriginal", "unknown"),
             "id": primary_video.get("id", "unknown"),
         }
+
+    def _extract_description_text(self, circo_post: Dict[str, Any]) -> str:
+        """
+        Extract description text from CircoPost
+        Combines title, secondaryCaption, primaryCaption, and description (all optional)
+
+        Args:
+            circo_post: CircoPost data
+
+        Returns:
+            Combined description text (empty string if none exist)
+        """
+        description_parts = []
+
+        # Get all optional fields
+        title = circo_post.get("title", "").strip()
+        primary_caption = circo_post.get("primaryCaption", "").strip()
+        secondary_caption = circo_post.get("secondaryCaption", "").strip()
+        description = circo_post.get("description", "").strip()
+
+        # Add non-empty fields in priority order
+        if title:
+            description_parts.append(title)
+        if secondary_caption:
+            description_parts.append(secondary_caption)
+        if primary_caption:
+            description_parts.append(primary_caption)
+        if description:
+            description_parts.append(description)
+
+        # Combine with newlines
+        return "\n".join(description_parts)
 
     def cleanup_files(self, files: List[str]):
         """Clean up temporary files"""
