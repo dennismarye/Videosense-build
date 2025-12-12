@@ -353,12 +353,19 @@ class EnhancedVideoProcessor:
 
             # Description Analysis - use AI context from Stage 1
             # Extract description from optional fields (title, secondaryCaption, primaryCaption, description)
+            logging.info(f"DEBUG: circo_post keys: {list(circo_post.keys())}")
+            logging.info(f"DEBUG: title value: {repr(circo_post.get('title'))}")
+            logging.info(
+                f"DEBUG: description value: {repr(circo_post.get('description'))}"
+            )
+
             total_description = self._extract_description_text(circo_post)
 
             # Debug logging
             logging.info(
-                f"Extracted description for job {job_id}: {repr(total_description)[:200]}"
+                f"Extracted description for job {job_id}: {repr(total_description)}"
             )
+            logging.info(f"Description length: {len(total_description)}")
             logging.info(f"AI context available: {bool(ai_context)}")
 
             if ai_context and total_description:
