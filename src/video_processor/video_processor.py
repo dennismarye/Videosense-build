@@ -355,6 +355,12 @@ class EnhancedVideoProcessor:
             # Extract description from optional fields (title, secondaryCaption, primaryCaption, description)
             total_description = self._extract_description_text(circo_post)
 
+            # Debug logging
+            logging.info(
+                f"Extracted description for job {job_id}: {repr(total_description)[:200]}"
+            )
+            logging.info(f"AI context available: {bool(ai_context)}")
+
             if ai_context and total_description:
                 description_result = (
                     await self.ai_service.analyze_description_alignment(
@@ -649,6 +655,11 @@ class EnhancedVideoProcessor:
         secondary_caption = circo_post.get("secondaryCaption", "").strip()
         description = circo_post.get("description", "").strip()
 
+        # Debug logging
+        logging.debug(
+            f"Description fields found - title: {bool(title)}, primaryCaption: {bool(primary_caption)}, secondaryCaption: {bool(secondary_caption)}, description: {bool(description)}"
+        )
+
         # Add non-empty fields in priority order
         if title:
             description_parts.append(title)
@@ -660,7 +671,9 @@ class EnhancedVideoProcessor:
             description_parts.append(description)
 
         # Combine with newlines
-        return "\n".join(description_parts)
+        result = "\n".join(description_parts)
+        logging.debug(f"Final combined description length: {len(result)}")
+        return result
 
     def cleanup_files(self, files: List[str]):
         """Clean up temporary files"""
