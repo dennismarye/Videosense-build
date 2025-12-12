@@ -73,13 +73,13 @@ class Settings(BaseSettings):
     SUPPORTED_VIDEO_FORMATS: str = "mp4,mov,avi,mkv,webm"
 
     # Quality Assessment Thresholds
-    MIN_QUALITY_SCORE: int = 45
+    MIN_QUALITY_SCORE: int = 0
     MIN_RESOLUTION_WIDTH: int = 360
     MIN_RESOLUTION_HEIGHT: int = 240
     MIN_FPS: float = 15.0
 
     # Description Alignment Thresholds
-    MIN_ALIGNMENT_SCORE: int = 10
+    MIN_ALIGNMENT_SCORE: int = 0
     EXCELLENT_ALIGNMENT_SCORE: int = 90
 
     # FFmpeg Configuration
