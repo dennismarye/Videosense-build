@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     MIN_FPS: float = 15.0
 
     # Description Alignment Thresholds
-    MIN_ALIGNMENT_SCORE: int = 45
+    MIN_ALIGNMENT_SCORE: int = 10
     EXCELLENT_ALIGNMENT_SCORE: int = 90
 
     # FFmpeg Configuration
@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     ENABLE_VIDEO_FRAGMENTATION: bool = True
 
     # Video Fragmentation Configuration
-    FRAGMENT_SAFETY_THRESHOLD: int = 85
+    FRAGMENT_SAFETY_THRESHOLD: int = 30
     FRAGMENT_ALLOWED_DURATIONS: list = [90, 180, 360]
     FRAGMENT_DEFAULT_DURATION: int = 180
 
