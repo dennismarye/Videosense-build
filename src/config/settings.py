@@ -99,7 +99,7 @@ class Settings(BaseSettings):
 
     # Video Fragmentation Configuration
     FRAGMENT_SAFETY_THRESHOLD: int = 30
-    FRAGMENT_ALLOWED_DURATIONS: list = [90, 180, 360]
+    FRAGMENT_ALLOWED_DURATIONS: list = [90, 120, 180, 360]
     FRAGMENT_DEFAULT_DURATION: int = 180
 
     @property
