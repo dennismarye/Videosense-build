@@ -19,6 +19,7 @@ from src.config.settings import settings
 from src.services.kafka_service import KafkaService
 from src.video_processor.video_processor import EnhancedVideoProcessor
 from src.monitoring.health_check import KafkaMonitorService
+from src.video_fragmentation.fragment_processor import FragmentProcessor
 
 # Configure logging with New Relic integration
 environment = settings.NODE_ENV
@@ -87,6 +88,9 @@ stop_event = threading.Event()
 # Enhanced Video Processor
 enhanced_processor = EnhancedVideoProcessor()
 
+# Fragment Processor (for video segmentation)
+fragment_processor = FragmentProcessor()
+
 
 @newrelic.agent.function_trace()
 def run_kafka_consumer():
@@ -113,7 +117,7 @@ def run_kafka_consumer():
 
 @newrelic.agent.background_task()
 async def process_kafka_message(message_data):
-    """Process Kafka messages with enhanced two-stage video classification"""
+    """Process Kafka messages with enhanced two-stage video classification and fragmentation"""
     try:
         newrelic.agent.add_custom_attribute("kafka.topic", settings.INPUT_TOPIC)
         newrelic.agent.add_custom_attribute("message.size", len(str(message_data)))
@@ -134,11 +138,51 @@ async def process_kafka_message(message_data):
                 )
             logging.info(f"Produced safety check result: {safety_result}")
 
+            # Check if fragmentation is requested AND safety passed
+            safety_check = safety_result.get("safety_check", {})
+            content_flag = safety_check.get("contentFlag", "")
+            safety_score = safety_result.get("tags", [])
+            # Calculate safety score (0-100) based on content flag
+            calculated_safety_score = (
+                100
+                if content_flag == "SAFE"
+                else (85 if content_flag == "RESTRICT_18+" else 0)
+            )
+
+            # CHECK: Should we fragment this video?
+            if (
+                settings.ENABLE_VIDEO_FRAGMENTATION
+                and message_data.get("fragment", False)
+                and fragment_processor.should_fragment(
+                    message_data, calculated_safety_score, content_flag
+                )
+            ):
+                # Fragmentation workflow
+                logging.info(
+                    f"Starting fragmentation workflow for job {message_data.get('jobId')}"
+                )
+                with newrelic.agent.FunctionTrace(name="video_fragmentation"):
+                    fragment_result = await fragment_processor.process_fragmentation(
+                        message_data
+                    )
+
+                if fragment_result:
+                    # Produce to fragmentation output topic
+                    with newrelic.agent.FunctionTrace(
+                        name="kafka_produce_fragmentation"
+                    ):
+                        await kafka_service.produce(
+                            topic=settings.FRAGMENT_OUTPUT_TOPIC, data=fragment_result
+                        )
+                    logging.info(f"Produced fragmentation result: {fragment_result}")
+                    newrelic.agent.add_custom_attribute("fragmentation.success", True)
+                    newrelic.agent.add_custom_attribute(
+                        "fragmentation.total_fragments",
+                        fragment_result.get("totalFragments", 0),
+                    )
+
             # Stage 2: Quality Analysis + Description Analysis (only if safety check passed)
-            if safety_result.get("safety_check", {}).get("contentFlag") in [
-                "SAFE",
-                "RESTRICT_18+",
-            ]:
+            if content_flag in ["SAFE", "RESTRICT_18+"]:
                 with newrelic.agent.FunctionTrace(
                     name="quality_and_description_analysis"
                 ):
@@ -159,7 +203,7 @@ async def process_kafka_message(message_data):
                     logging.info(f"Produced quality analysis result: {quality_result}")
             else:
                 logging.warning(
-                    f"Video failed safety check, skipping quality analysis. Job ID: {safety_result.get('jobId')}"
+                    f"Video failed safety check, skipping quality analysis and fragmentation. Job ID: {safety_result.get('jobId')}"
                 )
 
         newrelic.agent.add_custom_attribute("processing.success", True)

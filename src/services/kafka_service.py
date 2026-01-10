@@ -329,7 +329,7 @@ class KafkaService:
             logging.debug(
                 f"Reached end of partition: {msg.topic()}[{msg.partition()}] at offset {msg.offset()}"
             )
-        elif msg.error().code() == KafkaError._UNKNOWN_TOPIC_OR_PART:
+        elif msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
             logging.error(f"Unknown topic or partition: {msg.error()}")
             self.monitor.update_consumer_status("Topic Error")
         else:
