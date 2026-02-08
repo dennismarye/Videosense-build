@@ -1,0 +1,28 @@
+services:
+  video-sense:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LOCAL_MODE=true
+      - AI_SERVICE_TYPE=mock
+      - LOG_LEVEL=DEBUG
+      - PORT=8000
+    volumes:
+      - ./local_storage:/app/local_storage
+      - ./src:/app/src
+    command: ["python", "main_local.py"]
+
+  # Future services (ready for V2+):
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: videosense
+  #     POSTGRES_PASSWORD: local
+  #   ports:
+  #     - "5432:5432"
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"

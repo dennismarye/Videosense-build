@@ -58,3 +58,6 @@ coverage.xml
 logs/
 log/
 *.json
+
+# Local development storage
+local_storage/

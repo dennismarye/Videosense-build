@@ -1,100 +1,105 @@
-# Kafka Video Processing Microservice
+# Video Sense — Circo's AI Video Intelligence Engine
 
-## Overview
-A robust, scalable microservice for processing videos using Apache Kafka and AWS MSK.
+Video Sense is the intelligence layer behind Circo's creator platform. It analyzes
+video content — audio, scenes, speech, motion, narrative — and produces actionable
+outputs: teaser clips, platform-specific upload presets, content variants, thumbnail
+crop recommendations, and monetization signals.
 
-## Prerequisites
-- Python 3.10+
-- AWS Account
-- Access to AWS MSK Cluster
-- AWS IAM Credentials
+It is not a standalone product. It is a pipeline system designed to be embedded into
+Circo Studio, Broadcast, Series, and Reach.
 
-## Setup Instructions
+## Pipeline Versions
 
-### 1. Clone the Repository
+Video Sense uses an **additive pipeline architecture**. Each version extends the
+previous one — no version branching, no feature flags, no conditional logic.
+
+| Version | Steps  | What It Does |
+|---------|--------|----------------------------------------------|
+| **V0**  | 1-8    | Deterministic signal extraction: duration, scenes, silence, speech, thumbnails, topics, audio tone, summary |
+| **V1**  | 9-15   | AI-enhanced analysis: narrative beats, hook scoring, quality assessment, clip ranking, safety check, platform bundles, EDL export |
+| **V1.1**| 16-18  | Teaser engine: teaser selection, platform packaging, teaser export |
+| **V1.2**| 19-22  | Content packaging: title/description generation, hashtag normalization, thumbnail crop recommendations, upload preset assembly |
+
+Each version calls the previous: `V1.2 → V1.1 → V1 → V0`.
+
+V1.1 and V1.2 steps are **fault-tolerant** — if any step fails, the pipeline logs
+the error and continues. Prior version data is never lost.
+
+## How to Run
+
+### Install
+
 ```bash
-git clone https://your-repo-url/kafka-video-processor.git
-cd kafka-video-processor
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-### 2. Create Virtual Environment
+### Run the Dev Server
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+uvicorn src.api.main:app --reload --port 8000
 ```
 
-### 3. Install Dependencies
+### Analyze a Video (CLI)
+
 ```bash
-pip install -r requirements.txt
+video-sense analyze /path/to/video.mp4 --pipeline v1.2 --output result.json
 ```
 
-### 4. Configure AWS Credentials
-Option 1: AWS CLI Configuration
+### Health Check
+
+```
+GET /health
+```
+
+### Docker
+
 ```bash
-aws configure
+docker compose up --build
 ```
 
-Option 2: Environment Variables
-```bash
-export AWS_ACCESS_KEY_ID=your-access-key
-export AWS_SECRET_ACCESS_KEY=your-secret-key
-export AWS_REGION=us-east-1
+## Architecture Principles
+
+1. **Additive pipelines** — V1.2 calls V1.1 which calls V1 which calls V0. No
+   version branching. Every video always runs the full chain.
+
+2. **No version branching** — There is no `if version == "v1.2"` anywhere. The
+   pipeline is a linear chain of function calls.
+
+3. **MockAI for deterministic testing** — All AI calls go through an `AIService`
+   protocol. Tests use `MockAIService` which returns deterministic, non-random
+   results. No external API calls in the test suite.
+
+4. **Backward compatibility** — V1.2 models extend `VideoContext` with new optional
+   fields. Existing V0/V1/V1.1 fields are never modified by V1.2 steps.
+
+5. **Closure-based pipeline factories** — `create_v1_2_pipeline(ai_service)` returns
+   an `async (VideoContext) -> VideoContext` function. The `JobManager` only knows
+   about this signature — it doesn't know which pipeline version it's running.
+
+6. **Fault tolerance** — V1.1 and V1.2 steps wrap each action in `try/except`. If
+   step 20 (hashtags) fails, step 21 (crops) still runs. The pipeline only returns
+   `FAILED` if the core V1 pipeline fails.
+
+## Project Structure
+
+```
+src/
+  actions/          Signal extractors and content generators
+  api/              FastAPI + Strawberry GraphQL endpoints
+  cli.py            Click CLI (video-sense command)
+  config/           Settings and environment config
+  context/          VideoContext model + ContextStore
+  jobs/             Pipeline orchestration (V0, V1, V1.1, V1.2)
+  local/            MockAIService for deterministic testing
+  services/         AIService protocol definition
+tests/              395 tests covering models, actions, pipelines, API
 ```
 
-### 5. Configure Application
-1. Copy `.env` to `.env`
-2. Edit `.env` with your specific configurations
-```bash
-cp .env.example .env
-nano .env  # or use your preferred text editor
-```
+## Current Status
 
-### 6. Running the Application
+**Phase 4 of 6 complete.** The core engine is done — models, actions, pipeline
+integration, and 395 passing tests. Remaining phases:
 
-#### Development Mode
-```bash
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-#### Production Deployment
-```bash
-# Using Gunicorn (recommended for production)
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker src.main:app
-```
-
-### 7. Health Check
-Access the health check endpoint:
-```
-http://localhost:8000/health
-```
-
-## Monitoring and Logging
-- Check application logs for detailed tracking
-- Use the `/health` endpoint for service status
-- Implement additional monitoring as needed
-
-## Troubleshooting
-- Ensure AWS credentials are correctly configured
-- Verify MSK cluster network accessibility
-- Check Kafka topic configurations
-
-## Security Considerations
-- Use AWS IAM roles
-- Implement network security groups
-- Rotate credentials regularly
-
-## Contributing
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-```
-
-Additional notes for AWS MSK deployment:
-
-1. Ensure your AWS IAM role has necessary Kafka permissions
-2. Configure security groups to allow traffic
-3. Use AWS Secrets Manager for credential management in production
-
-Would you like me to elaborate on any specific aspect of AWS MSK integration or deployment?
+- Phase 5: API Layer (GraphQL types + `/dev/analyze-v1.2` endpoint)
+- Phase 6: CLI Completion (finish `analyze` command for V1.2)

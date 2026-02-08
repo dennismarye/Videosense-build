@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 
-# load_dotenv()  # Explicitly load the .env file
-load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
+# Load .env from project root (two levels up from src/config/)
+_project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_project_root / ".env")
 
 
 class Settings(BaseSettings):
@@ -16,16 +17,19 @@ class Settings(BaseSettings):
     Centralized configuration management using Pydantic
     """
 
-    # Kafka Configuration
-    KAFKA_BROKER: str
-    MICROSERVICE_CLIENTID: str
-    MICROSERVICE_GROUPID: str
-    KAFKA_ADMIN_CLIENT: str
+    # Local Development Mode — bypasses Kafka, S3, Gemini, and Slack
+    LOCAL_MODE: bool = False
 
-    AWS_REGION: str
-    WORKERS: int
-    KAFKA_USERNAME: str
-    KAFKA_PASSWORD: str
+    # Kafka Configuration (not required in LOCAL_MODE)
+    KAFKA_BROKER: str = "localhost:9092"
+    MICROSERVICE_CLIENTID: str = "video-classification-local"
+    MICROSERVICE_GROUPID: str = "video-classification-group-local"
+    KAFKA_ADMIN_CLIENT: str = "video-classification-admin-local"
+
+    AWS_REGION: str = "us-east-1"
+    WORKERS: int = 1
+    KAFKA_USERNAME: str = ""
+    KAFKA_PASSWORD: str = ""
     KAFKA_AUTH_TYPE: str = "SCRAM"
 
     # SSL and Security
@@ -33,7 +37,7 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-    NODE_ENV: str
+    NODE_ENV: str = "development"
 
     # Kafka Topic Configuration
     INPUT_TOPIC: str = "classification.moderate_post"
@@ -52,14 +56,20 @@ class Settings(BaseSettings):
     TEMP_DIR: str = "/tmp/video_processing"
     FRAGMENTATION_TEMP_DIR: str = "/tmp/video_fragmentation"
 
-    # Server Configuration
-    SERVER_HOST: str
-    KAFKA_CA_CERT_PATH: str = "./kafka.pem"
-    PORT: int
+    # Local Mode Directories
+    LOCAL_STORAGE_DIR: str = "local_storage"
+    LOCAL_INPUT_DIR: str = "local_storage/input"
+    LOCAL_OUTPUT_DIR: str = "local_storage/output"
+    LOCAL_FRAGMENTS_DIR: str = "local_storage/fragments"
 
-    # AI/ML Service Configuration
-    SLACK_BOT_TOKEN: str
-    GEMINI_KEY: str
+    # Server Configuration
+    SERVER_HOST: str = "0.0.0.0"
+    KAFKA_CA_CERT_PATH: str = "./kafka.pem"
+    PORT: int = 8000
+
+    # AI/ML Service Configuration (not required in LOCAL_MODE)
+    SLACK_BOT_TOKEN: str = ""
+    GEMINI_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_TIMEOUT: int = 600
 
@@ -90,6 +100,19 @@ class Settings(BaseSettings):
     CLEANUP_TEMP_FILES: bool = True
     MAX_CONCURRENT_PROCESSING: int = 5
 
+    # V1: AI Service Configuration
+    AI_SERVICE_TYPE: str = "mock"  # "mock" or "gemini"
+    WHISPER_MODEL_SIZE: str = "base"  # tiny, base, small, medium, large-v3
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
+    CLIP_EXPORT_DIR: str = "local_storage/clips"
+
+    # V1.1: Teaser Engine
+    TEASER_EXPORT_DIR: str = "local_storage/teasers"
+    TEASER_MAX_COUNT: int = 3
+    TEASER_WATERMARK_PATH: str = ""
+    ENABLE_TEASER_ENGINE: bool = True
+
     # Feature Flags
     ENABLE_QUALITY_ANALYSIS: bool = True
     ENABLE_DESCRIPTION_ANALYSIS: bool = True
@@ -119,8 +142,8 @@ class Settings(BaseSettings):
     KAFKA_CONSUMER_TIMEOUT: float = 1.0
     KAFKA_PRODUCER_TIMEOUT: int = 10
     GEMINI_REQUEST_TIMEOUT: int = 600
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
 
     def get_supported_video_formats(self) -> list:
         """Get list of supported video formats"""

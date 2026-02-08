@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "circo-video-sense"
+version = "1.2.0"
+description = "Circo Video Sense — AI Creative Intelligence Engine"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi==0.110.0",
+    "uvicorn==0.22.0",
+    "gunicorn==23.0.0",
+    "pydantic==2.11.4",
+    "pydantic-settings==2.7.1",
+    "strawberry-graphql==0.291.3",
+    # Video processing
+    "ffmpeg-python==0.2.0",
+    "moviepy==1.0.3",
+    "imageio==2.34.0",
+    "imageio-ffmpeg==0.4.9",
+    "pillow==11.1.0",
+    # AI/ML (optional at runtime — imported with try/except)
+    "google-generativeai==0.8.4",
+    # Cloud/Infra
+    "boto3==1.36.13",
+    "botocore==1.36.13",
+    "confluent-kafka==2.8.0",
+    "aws-msk-iam-sasl-signer-python==1.0.2",
+    # Monitoring
+    "newrelic==10.12.0",
+    "slack_sdk==3.34.0",
+    # Utilities
+    "grpcio==1.71.0",
+    "tqdm==4.67.1",
+    "python-dotenv==1.2.1",
+    "click==8.3.1",
+]
+
+[project.optional-dependencies]
+ml = [
+    "faster-whisper>=1.1.0",
+    "opencv-python-headless>=4.10.0",
+]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.3",
+    "pytest-cov>=4.0.0",
+    "pip-tools>=7.0.0",
+]
+
+[project.scripts]
+video-sense = "src.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
