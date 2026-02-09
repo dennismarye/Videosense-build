@@ -15,15 +15,9 @@ class S3VideoAnalyzer:
 
     def __init__(self, aws_access_key=None, aws_secret_key=None, region="us-east-1"):
         """Initialize the S3 Video Analyzer with optional AWS credentials"""
-        """Initialize the S3 Video Analyzer with optional AWS credentials"""
         self.aws_access_key = aws_access_key
         self.aws_secret_key = aws_secret_key
         self.region = region
-
-        if aws_access_key:
-            os.environ["AWS_ACCESS_KEY_ID"] = aws_access_key
-            os.environ["AWS_SECRET_ACCESS_KEY"] = aws_secret_key
-            os.environ["AWS_DEFAULT_REGION"] = region
 
         # Initialize S3 client for presigned URLs
         try:

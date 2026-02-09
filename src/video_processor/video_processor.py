@@ -273,7 +273,7 @@ class EnhancedVideoProcessor:
             # 🔥 KEY CHANGE: Convert to presigned URL before ffmpeg call
             accessible_url = self.video_analyzer._get_presigned_url(video_url)
 
-            logging.info(accessible_url)
+            logging.debug("Presigned URL generated for job %s", job_id)
 
             # Use FFmpeg to download and compress video
             ffmpeg_cmd = (
@@ -353,9 +353,9 @@ class EnhancedVideoProcessor:
 
             # Description Analysis - use AI context from Stage 1
             # Extract description from optional fields (title, secondaryCaption, primaryCaption, description)
-            logging.info(f"DEBUG: circo_post keys: {list(circo_post.keys())}")
-            logging.info(f"DEBUG: title value: {repr(circo_post.get('title'))}")
-            logging.info(
+            logging.debug(f"DEBUG: circo_post keys: {list(circo_post.keys())}")
+            logging.debug(f"DEBUG: title value: {repr(circo_post.get('title'))}")
+            logging.debug(
                 f"DEBUG: description value: {repr(circo_post.get('description'))}"
             )
 

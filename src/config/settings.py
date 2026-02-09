@@ -194,9 +194,9 @@ class Settings(BaseSettings):
         """Get all Kafka topics configuration"""
         return {
             "input": self.INPUT_TOPIC,
-            "output": self.OUTPUT_TOPIC,
             "safety_output": self.SAFETY_OUTPUT_TOPIC,
             "quality_output": self.QUALITY_OUTPUT_TOPIC,
+            "fragment_output": self.FRAGMENT_OUTPUT_TOPIC,
         }
 
 
