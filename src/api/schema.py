@@ -923,12 +923,17 @@ def create_schema(context_store, job_manager):
             # Generate content on-demand — AI service selected via config
             from src.actions.content_generator import generate_content
             from src.config.settings import settings as app_settings
-            from src.local.mock_ai_service import MockAIService
 
-            # MockAIService is the only AIService protocol implementation today.
-            # When a real adapter (e.g. GeminiAIService) exists, gate on
-            # app_settings.AI_SERVICE_TYPE / app_settings.LOCAL_MODE here.
-            ai_service = MockAIService()
+            if app_settings.LOCAL_MODE or app_settings.AI_SERVICE_TYPE == "mock":
+                from src.local.mock_ai_service import MockAIService
+                ai_service = MockAIService()
+            else:
+                raise ValueError(
+                    "Content generation requires an AI service. "
+                    "Set AI_SERVICE_TYPE=mock or LOCAL_MODE=true, "
+                    "or configure a real AI adapter."
+                )
+
             content = await generate_content(ctx, ai_service)
             ctx.content_variants = content
             await context_store.save(ctx)

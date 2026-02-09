@@ -640,3 +640,74 @@ class TestV12Mutations:
         data = result.data["generateContent"]
         assert data["titlesCount"] == 0
         assert data["alreadyExisted"] is False
+
+    async def test_generate_content_rejects_non_mock_mode(self, gql_setup):
+        """Non-local mode with non-mock AI_SERVICE_TYPE should raise an error."""
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(
+            video_id="v1",
+            duration=120.0,
+            topics=[Topic(label="tech", confidence=0.9, timestamps=[0.0])],
+            summary="Test summary",
+        )
+        await store.save(ctx)
+
+        from src.config import settings as settings_module
+        original_local = settings_module.settings.LOCAL_MODE
+        original_type = settings_module.settings.AI_SERVICE_TYPE
+        try:
+            settings_module.settings.LOCAL_MODE = False
+            settings_module.settings.AI_SERVICE_TYPE = "gemini"
+
+            result = await schema.execute(
+                'mutation { generateContent(videoId: "v1") { titlesCount alreadyExisted } }'
+            )
+            assert result.errors is not None
+            assert "AI service" in str(result.errors[0])
+        finally:
+            settings_module.settings.LOCAL_MODE = original_local
+            settings_module.settings.AI_SERVICE_TYPE = original_type
+
+    async def test_generate_content_idempotent_ignores_mode(self, gql_setup):
+        """Idempotency returns existing content regardless of AI mode."""
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(
+            video_id="v1",
+            content_variants=ContentVariants(
+                titles=[TitleVariant(text="Existing", style=TitleStyle.HOOK, platform=Platform.CIRCO)],
+                descriptions=[DescriptionVariant(text="Existing desc", platform=Platform.CIRCO)],
+            ),
+        )
+        await store.save(ctx)
+
+        from src.config import settings as settings_module
+        original_local = settings_module.settings.LOCAL_MODE
+        original_type = settings_module.settings.AI_SERVICE_TYPE
+        try:
+            settings_module.settings.LOCAL_MODE = False
+            settings_module.settings.AI_SERVICE_TYPE = "gemini"
+
+            result = await schema.execute(
+                'mutation { generateContent(videoId: "v1") { titlesCount alreadyExisted } }'
+            )
+            assert result.errors is None
+            assert result.data["generateContent"]["alreadyExisted"] is True
+            assert result.data["generateContent"]["titlesCount"] == 1
+        finally:
+            settings_module.settings.LOCAL_MODE = original_local
+            settings_module.settings.AI_SERVICE_TYPE = original_type
+
+
+# ── Settings sanity tests ────────────────────────────────────
+
+class TestSettingsMethods:
+    def test_get_kafka_topics_does_not_raise(self):
+        """get_kafka_topics() must not raise AttributeError."""
+        from src.config.settings import Settings
+        s = Settings()
+        topics = s.get_kafka_topics()
+        assert isinstance(topics, dict)
+        assert "input" in topics
+        assert "safety_output" in topics
+        assert "quality_output" in topics
+        assert "fragment_output" in topics
