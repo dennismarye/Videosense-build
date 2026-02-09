@@ -43,8 +43,13 @@ uvicorn src.api.main:app --reload --port 8000
 ### Analyze a Video (CLI)
 
 ```bash
-video-sense analyze /path/to/video.mp4 --pipeline v1.2 --output result.json
+video-sense analyze /path/to/video.mp4                          # default: v1.2 pipeline, free tier
+video-sense analyze /path/to/video.mp4 --pipeline v1 --tier pro # specific pipeline + tier
+video-sense analyze /path/to/video.mp4 --output result.json     # write JSON to file
 ```
+
+Supported pipelines: `v0`, `v1`, `v1.1`, `v1.2` (default).
+Supported tiers: `free` (default), `plus`, `pro`, `enterprise`.
 
 ### Health Check
 
@@ -93,7 +98,7 @@ src/
   jobs/             Pipeline orchestration (V0, V1, V1.1, V1.2)
   local/            MockAIService for deterministic testing
   services/         AIService protocol definition
-tests/              409 tests covering models, actions, pipelines, API
+tests/              417 tests covering models, actions, pipelines, API, CLI
 ```
 
 ## API Endpoints
@@ -125,9 +130,17 @@ exist, it returns them without regenerating.
 
 ## Current Status
 
-**Phase 5 of 6 complete.** Core engine + API layer done — models, actions,
-pipeline, GraphQL types/queries/mutations, dev endpoint, and 409 passing tests.
+**All 6 phases complete.** Core engine, API layer, and CLI — models, actions,
+pipeline, GraphQL types/queries/mutations, dev endpoints, CLI analyze command,
+and 417 passing tests.
 
-Remaining:
+### Phase Summary
 
-- Phase 6: CLI Completion (finish `analyze` command for V1.2)
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 | V1.2 Models (TitleVariant, ContentVariants, CropRegion, UploadPreset, etc.) | Complete |
+| 2 | V1.2 Actions (content generator, hashtag normalizer, thumbnail cropper, upload preset builder) | Complete |
+| 3 | V1.2 Pipeline (steps 19-22, fault-tolerant, additive on V1.1) | Complete |
+| 4 | V1.2 Pipeline Tests (integration, fault tolerance, backward compat) | Complete |
+| 5 | V1.2 API Layer (GraphQL types, queries, mutation, `/dev/analyze-v1.2` endpoint) | Complete |
+| 6 | CLI Completion (`video-sense analyze` command with all pipeline versions) | Complete |
