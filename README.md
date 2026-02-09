@@ -93,13 +93,41 @@ src/
   jobs/             Pipeline orchestration (V0, V1, V1.1, V1.2)
   local/            MockAIService for deterministic testing
   services/         AIService protocol definition
-tests/              395 tests covering models, actions, pipelines, API
+tests/              409 tests covering models, actions, pipelines, API
 ```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Health check |
+| GET | `/graphql` | GraphiQL IDE |
+| POST | `/dev/analyze` | V0 analysis |
+| POST | `/dev/analyze-v1` | V1 analysis |
+| POST | `/dev/analyze-v1.1` | V1.1 teaser engine |
+| POST | `/dev/analyze-v1.2` | V1.2 content packaging |
+
+### GraphQL V1.2 Queries
+
+```graphql
+query { contentVariants(videoId: "...") { titles { text style platform } descriptions { text platform } } }
+query { uploadPresets(videoId: "...", platform: "tiktok") { presetId platform ready missing } }
+```
+
+### GraphQL V1.2 Mutation
+
+```graphql
+mutation { generateContent(videoId: "...") { titlesCount descriptionsCount alreadyExisted } }
+```
+
+The `generateContent` mutation is **idempotent** — if content variants already
+exist, it returns them without regenerating.
 
 ## Current Status
 
-**Phase 4 of 6 complete.** The core engine is done — models, actions, pipeline
-integration, and 395 passing tests. Remaining phases:
+**Phase 5 of 6 complete.** Core engine + API layer done — models, actions,
+pipeline, GraphQL types/queries/mutations, dev endpoint, and 409 passing tests.
 
-- Phase 5: API Layer (GraphQL types + `/dev/analyze-v1.2` endpoint)
+Remaining:
+
 - Phase 6: CLI Completion (finish `analyze` command for V1.2)

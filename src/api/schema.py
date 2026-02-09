@@ -34,6 +34,16 @@ from src.context.models import (
     Entity as EntityModel,
     NarrativeBeat as NarrativeBeatModel,
     JobStatus,
+    # V1.2 models
+    TitleStyle,
+    TitleVariant as TitleVariantModel,
+    DescriptionVariant as DescriptionVariantModel,
+    ContentVariants as ContentVariantsModel,
+    NormalizedHashtag as NormalizedHashtagModel,
+    HashtagSet as HashtagSetModel,
+    CropRegion as CropRegionModel,
+    ThumbnailCrop as ThumbnailCropModel,
+    UploadPreset as UploadPresetModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,6 +236,93 @@ class SeriesContextType:
     teaser_mode: str
 
 
+# ── V1.2 Content Packaging GraphQL Types ─────────────────────
+
+@strawberry.type
+class TitleVariantType:
+    text: str
+    style: str
+    platform: str
+    confidence: float
+
+
+@strawberry.type
+class DescriptionVariantType:
+    text: str
+    platform: str
+    includes_cta: bool
+    includes_timestamps: bool
+
+
+@strawberry.type
+class ContentVariantsType:
+    titles: List[TitleVariantType]
+    descriptions: List[DescriptionVariantType]
+    generated_at: str
+
+
+@strawberry.type
+class NormalizedHashtagType:
+    tag: str
+    relevance: float
+    platform_rank: int
+    regional_variant: Optional[str]
+
+
+@strawberry.type
+class HashtagSetType:
+    platform: str
+    hashtags: List[NormalizedHashtagType]
+    region: Optional[str]
+
+
+@strawberry.type
+class CropRegionType:
+    x: int
+    y: int
+    width: int
+    height: int
+    aspect_ratio: str
+    frame_width: int
+    frame_height: int
+
+
+@strawberry.type
+class ThumbnailCropType:
+    thumbnail_index: int
+    platform: str
+    crop: CropRegionType
+    score: float
+    preview_path: Optional[str]
+
+
+@strawberry.type
+class UploadPresetType:
+    preset_id: str
+    platform: str
+    teaser_id: Optional[str]
+    clip_id: Optional[str]
+    format: str
+    aspect_ratio: str
+    max_duration: float
+    resolution: str
+    title: Optional[TitleVariantType]
+    description: Optional[DescriptionVariantType]
+    hashtags: Optional[HashtagSetType]
+    thumbnail: Optional[ThumbnailCropType]
+    export_path: Optional[str]
+    ready: bool
+    missing: List[str]
+
+
+@strawberry.type
+class ContentGenerateResult:
+    video_id: str
+    titles_count: int
+    descriptions_count: int
+    already_existed: bool
+
+
 @strawberry.type
 class VideoContextType:
     """The complete Context Graph for a video — the core GraphQL type."""
@@ -274,6 +371,11 @@ class VideoContextType:
     platform_bundles: List[PlatformBundleType]
     series_context: Optional[SeriesContextType]
 
+    # V1.2 Content Packaging
+    content_variants: Optional[ContentVariantsType]
+    thumbnail_crops: List[ThumbnailCropType]
+    upload_presets: List[UploadPresetType]
+
 
 @strawberry.type
 class JobSubmitResult:
@@ -293,6 +395,73 @@ class PipelineStats:
 
 
 # ── Converter: Pydantic → Strawberry ─────────────────────────
+
+def _convert_title_variant(t) -> TitleVariantType:
+    return TitleVariantType(
+        text=t.text, style=t.style.value, platform=t.platform.value,
+        confidence=t.confidence,
+    )
+
+
+def _convert_description_variant(d) -> DescriptionVariantType:
+    return DescriptionVariantType(
+        text=d.text, platform=d.platform.value,
+        includes_cta=d.includes_cta, includes_timestamps=d.includes_timestamps,
+    )
+
+
+def _convert_hashtag_set(hs) -> HashtagSetType:
+    return HashtagSetType(
+        platform=hs.platform.value,
+        hashtags=[
+            NormalizedHashtagType(
+                tag=h.tag, relevance=h.relevance,
+                platform_rank=h.platform_rank, regional_variant=h.regional_variant,
+            ) for h in hs.hashtags
+        ],
+        region=hs.region,
+    )
+
+
+def _convert_crop_region(cr) -> CropRegionType:
+    return CropRegionType(
+        x=cr.x, y=cr.y, width=cr.width, height=cr.height,
+        aspect_ratio=cr.aspect_ratio,
+        frame_width=cr.frame_width, frame_height=cr.frame_height,
+    )
+
+
+def _convert_thumbnail_crop(tc) -> ThumbnailCropType:
+    return ThumbnailCropType(
+        thumbnail_index=tc.thumbnail_index, platform=tc.platform.value,
+        crop=_convert_crop_region(tc.crop), score=tc.score,
+        preview_path=tc.preview_path,
+    )
+
+
+def _convert_upload_preset(p) -> UploadPresetType:
+    return UploadPresetType(
+        preset_id=p.preset_id, platform=p.platform.value,
+        teaser_id=p.teaser_id, clip_id=p.clip_id,
+        format=p.format, aspect_ratio=p.aspect_ratio,
+        max_duration=p.max_duration, resolution=p.resolution,
+        title=_convert_title_variant(p.title) if p.title else None,
+        description=_convert_description_variant(p.description) if p.description else None,
+        hashtags=_convert_hashtag_set(p.hashtags) if p.hashtags else None,
+        thumbnail=_convert_thumbnail_crop(p.thumbnail) if p.thumbnail else None,
+        export_path=p.export_path,
+        ready=p.ready,
+        missing=p.missing,
+    )
+
+
+def _convert_content_variants(cv) -> ContentVariantsType:
+    return ContentVariantsType(
+        titles=[_convert_title_variant(t) for t in cv.titles],
+        descriptions=[_convert_description_variant(d) for d in cv.descriptions],
+        generated_at=cv.generated_at.isoformat(),
+    )
+
 
 def _convert_context(ctx: VideoContext) -> VideoContextType:
     """Convert a Pydantic VideoContext to the Strawberry GraphQL type."""
@@ -415,6 +584,10 @@ def _convert_context(ctx: VideoContext) -> VideoContextType:
             total_episodes=ctx.series_context.total_episodes,
             teaser_mode=ctx.series_context.teaser_mode.value,
         ) if ctx.series_context else None,
+        # V1.2 Content Packaging
+        content_variants=_convert_content_variants(ctx.content_variants) if ctx.content_variants else None,
+        thumbnail_crops=[_convert_thumbnail_crop(tc) for tc in ctx.thumbnail_crops],
+        upload_presets=[_convert_upload_preset(p) for p in ctx.upload_presets],
     )
 
 
@@ -546,6 +719,27 @@ def create_schema(context_store, job_manager):
                     watermarked=b.watermarked,
                 ) for b in bundles
             ]
+
+        # ── V1.2 Queries ─────────────────────────────────────
+
+        @strawberry.field(description="Get content variants (titles + descriptions) for a video")
+        async def content_variants(self, video_id: str) -> Optional[ContentVariantsType]:
+            ctx = await context_store.get_by_video_id(video_id)
+            if not ctx or not ctx.content_variants:
+                return None
+            return _convert_content_variants(ctx.content_variants)
+
+        @strawberry.field(description="Get upload presets for a video, optionally filtered by platform")
+        async def upload_presets(
+            self, video_id: str, platform: Optional[str] = None,
+        ) -> List[UploadPresetType]:
+            ctx = await context_store.get_by_video_id(video_id)
+            if not ctx:
+                return []
+            presets = ctx.upload_presets
+            if platform:
+                presets = [p for p in presets if p.platform.value == platform]
+            return [_convert_upload_preset(p) for p in presets]
 
     @strawberry.type
     class Mutation:
@@ -705,6 +899,42 @@ def create_schema(context_store, job_manager):
                     narrative_alignment=t.narrative_alignment,
                 ) for t in ctx.teasers
             ]
+
+        # ── V1.2 Mutations ────────────────────────────────────
+
+        @strawberry.mutation(description="Generate content variants for an already-analyzed video (V1.2). Idempotent: returns existing data if already generated.")
+        async def generate_content(self, video_id: str) -> ContentGenerateResult:
+            ctx = await context_store.get_by_video_id(video_id)
+            if not ctx:
+                return ContentGenerateResult(
+                    video_id=video_id, titles_count=0,
+                    descriptions_count=0, already_existed=False,
+                )
+
+            # Idempotency: if content already exists, return it
+            if ctx.content_variants:
+                return ContentGenerateResult(
+                    video_id=video_id,
+                    titles_count=len(ctx.content_variants.titles),
+                    descriptions_count=len(ctx.content_variants.descriptions),
+                    already_existed=True,
+                )
+
+            # Generate content on-demand
+            from src.actions.content_generator import generate_content
+            from src.local.mock_ai_service import MockAIService
+
+            ai_service = MockAIService()
+            content = await generate_content(ctx, ai_service)
+            ctx.content_variants = content
+            await context_store.save(ctx)
+
+            return ContentGenerateResult(
+                video_id=video_id,
+                titles_count=len(content.titles),
+                descriptions_count=len(content.descriptions),
+                already_existed=False,
+            )
 
     schema = strawberry.Schema(query=Query, mutation=Mutation)
     return schema

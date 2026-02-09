@@ -62,6 +62,9 @@ from src.jobs.pipeline_v1 import create_v1_pipeline
 from src.jobs.pipeline_v1_1 import create_v1_1_pipeline
 from src.context.models import SeriesContext, TeaserMode
 
+# ── V1.2: Content Packaging Pipeline ─────────────────────────
+from src.jobs.pipeline_v1_2 import create_v1_2_pipeline
+
 # ── Logging (plain, no New Relic) ─────────────────────────────
 LOG_LEVEL = logging.DEBUG
 logging.basicConfig(
@@ -140,6 +143,16 @@ v1_1_job_manager = JobManager(
 )
 logger.info("V1.1 Teaser Engine pipeline initialized")
 os.makedirs(settings.TEASER_EXPORT_DIR, exist_ok=True)
+
+# V1.2 pipeline (wraps V1.1 + adds content packaging)
+v1_2_pipeline = create_v1_2_pipeline(mock_ai_service)
+
+# V1.2 job manager (for /dev/analyze-v1.2)
+v1_2_job_manager = JobManager(
+    context_store=context_store,  # shared store
+    pipeline_fn=v1_2_pipeline,
+)
+logger.info("V1.2 Content Packaging pipeline initialized")
 
 stop_event = threading.Event()
 
@@ -237,7 +250,9 @@ async def lifespan(app: FastAPI):
     logger.info("  V1 Pipeline:   ACTIVE (FFmpeg + MockAI)")
     logger.info("  V0 Pipeline:   ACTIVE (FFmpeg-only)")
     logger.info("  V1.1 Teasers:  ACTIVE (Teaser Engine)")
+    logger.info("  V1.2 Content:  ACTIVE (Content Packaging)")
     logger.info("  GraphQL IDE:   /graphql")
+    logger.info("  V1.2 Analyze:  POST /dev/analyze-v1.2")
     logger.info("  V1.1 Analyze:  POST /dev/analyze-v1.1")
     logger.info("  V1 Analyze:    POST /dev/analyze-v1")
     logger.info("  V0 Analyze:    POST /dev/analyze")
@@ -607,6 +622,98 @@ async def dev_analyze_video_v1_1(
             f'{{ videoContext(videoId: "{context.video_id}") '
             f'{{ status teasers {{ teaserId start end teaserScore mode rationale }} '
             f'platformBundles {{ platform title hashtags exported watermarked }} }} }}'
+        ),
+    })
+
+
+@app.post("/dev/analyze-v1.2")
+async def dev_analyze_video_v1_2(
+    video: UploadFile = File(...),
+    creator_id: Optional[str] = Form(None),
+    tier: str = Form("free"),
+    series_id: Optional[str] = Form(None),
+    series_title: Optional[str] = Form(None),
+    episode_number: Optional[int] = Form(None),
+    teaser_mode: Optional[str] = Form(None),
+):
+    """
+    Upload a video and run V1.2 Content Packaging analysis.
+
+    Full pipeline: V0 + V1 + V1.1 Teasers + V1.2 Content Packaging.
+    Returns structured summary including content variants, thumbnail crops,
+    and upload presets.
+    """
+    video_id = str(uuid.uuid4())
+
+    # Save uploaded file
+    input_path = os.path.join(settings.LOCAL_INPUT_DIR, f"{video_id}_{video.filename}")
+    with open(input_path, "wb") as f:
+        shutil.copyfileobj(video.file, f)
+
+    file_size = os.path.getsize(input_path)
+    logger.info(f"[V1.2] Saved upload: {input_path} ({file_size} bytes)")
+
+    # Build job request with series metadata in options
+    options = {}
+    if series_id:
+        options["series_id"] = series_id
+        options["series_title"] = series_title or ""
+        options["episode_number"] = episode_number or 1
+        options["teaser_mode"] = teaser_mode or "trailer"
+
+    request = JobRequest(
+        video_id=video_id,
+        creator_id=creator_id,
+        source_path=input_path,
+        tier=tier,
+        options=options,
+    )
+
+    # Submit and propagate series context before execution
+    context = await v1_2_job_manager.submit(request)
+
+    if context.status.value != "complete":
+        # Attach series context if provided
+        if series_id:
+            mode = TeaserMode(teaser_mode) if teaser_mode and teaser_mode in [m.value for m in TeaserMode] else TeaserMode.TRAILER
+            context.series_context = SeriesContext(
+                series_id=series_id,
+                series_title=series_title or "",
+                episode_number=episode_number or 1,
+                teaser_mode=mode,
+            )
+
+        await v1_2_job_manager.context_store.save(context)
+        context = await v1_2_job_manager.execute(request.video_id)
+
+    # Return V1.2 summary
+    return JSONResponse(content={
+        "video_id": context.video_id,
+        "job_id": context.job_id,
+        "status": context.status.value,
+        "pipeline": "v1.2",
+        "tier": tier,
+        "duration": context.duration,
+        # V0+V1 signals
+        "scenes": len(context.scenes),
+        "suggested_clips": len(context.suggested_clips),
+        "summary": context.summary,
+        # V1.1 teasers
+        "teasers": len(context.teasers),
+        "platform_bundles": len(context.platform_bundles),
+        # V1.2 content packaging
+        "content_variants": {
+            "titles": len(context.content_variants.titles) if context.content_variants else 0,
+            "descriptions": len(context.content_variants.descriptions) if context.content_variants else 0,
+        },
+        "thumbnail_crops": len(context.thumbnail_crops),
+        "upload_presets": len(context.upload_presets),
+        "presets_ready": sum(1 for p in context.upload_presets if p.ready),
+        "graphql_query": (
+            f'{{ videoContext(videoId: "{context.video_id}") '
+            f'{{ status contentVariants {{ titles {{ text style platform }} '
+            f'descriptions {{ text platform }} }} '
+            f'uploadPresets {{ presetId platform ready missing }} }} }}'
         ),
     })
 

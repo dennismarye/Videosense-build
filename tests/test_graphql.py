@@ -7,9 +7,14 @@ from src.api.schema import create_schema, _convert_context
 from src.context.models import (
     AudioTone,
     ClipFormat,
+    ContentVariants,
+    CropRegion,
+    DescriptionVariant,
+    HashtagSet,
     HookScore,
     JobRequest,
     NarrativeBeat,
+    NormalizedHashtag,
     OverallQuality,
     QualityLevel,
     Scene,
@@ -17,12 +22,16 @@ from src.context.models import (
     SuggestedClip,
     Teaser,
     TeaserMode,
+    ThumbnailCrop,
+    TitleStyle,
+    TitleVariant,
     PlatformBundle,
     Platform,
     SeriesContext,
     ThumbnailCandidate,
     TimeRange,
     Topic,
+    UploadPreset,
     VideoContext,
 )
 from src.context.context_store import ContextStore
@@ -363,3 +372,271 @@ class TestMutations:
 
         assert ids1 == ids2
         assert ids1 == ["existing-t1"]
+
+
+# ── V1.2 Converter tests ────────────────────────────────────
+
+class TestConvertContextV12:
+    def test_content_variants_converted(self):
+        ctx = VideoContext(
+            video_id="v1",
+            content_variants=ContentVariants(
+                titles=[
+                    TitleVariant(text="Hook title", style=TitleStyle.HOOK, platform=Platform.TIKTOK, confidence=0.9),
+                ],
+                descriptions=[
+                    DescriptionVariant(text="A short description", platform=Platform.TIKTOK),
+                ],
+            ),
+        )
+        from src.api.schema import _convert_context
+        gql = _convert_context(ctx)
+        assert gql.content_variants is not None
+        assert len(gql.content_variants.titles) == 1
+        assert gql.content_variants.titles[0].style == "hook"
+        assert gql.content_variants.titles[0].platform == "tiktok"
+        assert len(gql.content_variants.descriptions) == 1
+        assert gql.content_variants.descriptions[0].platform == "tiktok"
+
+    def test_content_variants_null_when_missing(self):
+        ctx = VideoContext(video_id="v1")
+        from src.api.schema import _convert_context
+        gql = _convert_context(ctx)
+        assert gql.content_variants is None
+
+    def test_thumbnail_crops_converted(self):
+        crop = CropRegion(x=0, y=0, width=1080, height=1080, aspect_ratio="1:1")
+        ctx = VideoContext(
+            video_id="v1",
+            thumbnail_crops=[
+                ThumbnailCrop(thumbnail_index=0, platform=Platform.INSTAGRAM_REELS, crop=crop, score=0.8),
+            ],
+        )
+        from src.api.schema import _convert_context
+        gql = _convert_context(ctx)
+        assert len(gql.thumbnail_crops) == 1
+        assert gql.thumbnail_crops[0].platform == "instagram_reels"
+        assert gql.thumbnail_crops[0].crop.aspect_ratio == "1:1"
+        assert gql.thumbnail_crops[0].score == 0.8
+
+    def test_upload_presets_converted(self):
+        ctx = VideoContext(
+            video_id="v1",
+            upload_presets=[
+                UploadPreset(
+                    platform=Platform.TIKTOK,
+                    title=TitleVariant(text="Test", style=TitleStyle.HOOK, platform=Platform.TIKTOK),
+                    description=DescriptionVariant(text="Desc", platform=Platform.TIKTOK),
+                    hashtags=HashtagSet(
+                        platform=Platform.TIKTOK,
+                        hashtags=[NormalizedHashtag(tag="test", relevance=0.9)],
+                    ),
+                ),
+            ],
+        )
+        from src.api.schema import _convert_context
+        gql = _convert_context(ctx)
+        assert len(gql.upload_presets) == 1
+        preset = gql.upload_presets[0]
+        assert preset.platform == "tiktok"
+        assert preset.title is not None
+        assert preset.title.text == "Test"
+        assert preset.hashtags is not None
+        assert len(preset.hashtags.hashtags) == 1
+        # Missing export_path → not ready
+        assert preset.ready is False
+        assert "export_path" in preset.missing
+
+    def test_upload_preset_ready_when_complete(self):
+        ctx = VideoContext(
+            video_id="v1",
+            upload_presets=[
+                UploadPreset(
+                    platform=Platform.CIRCO,
+                    title=TitleVariant(text="T", style=TitleStyle.DESCRIPTIVE, platform=Platform.CIRCO),
+                    description=DescriptionVariant(text="D", platform=Platform.CIRCO),
+                    hashtags=HashtagSet(
+                        platform=Platform.CIRCO,
+                        hashtags=[NormalizedHashtag(tag="c", relevance=0.5)],
+                    ),
+                    export_path="/tmp/out.mp4",
+                ),
+            ],
+        )
+        from src.api.schema import _convert_context
+        gql = _convert_context(ctx)
+        assert gql.upload_presets[0].ready is True
+        assert gql.upload_presets[0].missing == []
+
+
+# ── V1.2 Query tests ────────────────────────────────────────
+
+class TestV12Queries:
+    async def test_content_variants_query(self, gql_setup):
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(
+            video_id="v1",
+            content_variants=ContentVariants(
+                titles=[
+                    TitleVariant(text="Title 1", style=TitleStyle.HOOK, platform=Platform.TIKTOK, confidence=0.9),
+                    TitleVariant(text="Title 2", style=TitleStyle.QUESTION, platform=Platform.YOUTUBE_SHORTS, confidence=0.7),
+                ],
+                descriptions=[
+                    DescriptionVariant(text="Short desc", platform=Platform.TIKTOK),
+                ],
+            ),
+        )
+        await store.save(ctx)
+
+        result = await schema.execute(
+            'query { contentVariants(videoId: "v1") { titles { text style platform confidence } descriptions { text platform } } }'
+        )
+        assert result.errors is None
+        data = result.data["contentVariants"]
+        assert len(data["titles"]) == 2
+        assert data["titles"][0]["style"] == "hook"
+        assert data["titles"][1]["platform"] == "youtube_shorts"
+        assert len(data["descriptions"]) == 1
+
+    async def test_content_variants_returns_null_when_missing(self, gql_setup):
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(video_id="v1")
+        await store.save(ctx)
+
+        result = await schema.execute(
+            'query { contentVariants(videoId: "v1") { titles { text } } }'
+        )
+        assert result.errors is None
+        assert result.data["contentVariants"] is None
+
+    async def test_content_variants_not_found(self, gql_setup):
+        schema, store, mgr = gql_setup
+        result = await schema.execute(
+            'query { contentVariants(videoId: "missing") { titles { text } } }'
+        )
+        assert result.errors is None
+        assert result.data["contentVariants"] is None
+
+    async def test_upload_presets_query(self, gql_setup):
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(
+            video_id="v1",
+            upload_presets=[
+                UploadPreset(platform=Platform.TIKTOK),
+                UploadPreset(platform=Platform.CIRCO),
+            ],
+        )
+        await store.save(ctx)
+
+        result = await schema.execute(
+            'query { uploadPresets(videoId: "v1") { presetId platform ready missing } }'
+        )
+        assert result.errors is None
+        data = result.data["uploadPresets"]
+        assert len(data) == 2
+        platforms = {p["platform"] for p in data}
+        assert "tiktok" in platforms
+        assert "circo" in platforms
+
+    async def test_upload_presets_filter_by_platform(self, gql_setup):
+        schema, store, mgr = gql_setup
+        ctx = VideoContext(
+            video_id="v1",
+            upload_presets=[
+                UploadPreset(platform=Platform.TIKTOK),
+                UploadPreset(platform=Platform.CIRCO),
+                UploadPreset(platform=Platform.TIKTOK),
+            ],
+        )
+        await store.save(ctx)
+
+        result = await schema.execute(
+            'query { uploadPresets(videoId: "v1", platform: "tiktok") { platform } }'
+        )
+        assert result.errors is None
+        data = result.data["uploadPresets"]
+        assert len(data) == 2
+        assert all(p["platform"] == "tiktok" for p in data)
+
+    async def test_upload_presets_empty_for_missing_video(self, gql_setup):
+        schema, store, mgr = gql_setup
+        result = await schema.execute(
+            'query { uploadPresets(videoId: "missing") { presetId } }'
+        )
+        assert result.errors is None
+        assert result.data["uploadPresets"] == []
+
+
+# ── V1.2 Mutation tests ─────────────────────────────────────
+
+class TestV12Mutations:
+    async def test_generate_content_creates_variants(self, gql_setup):
+        schema, store, mgr = gql_setup
+        # Need a context with topics/summary for content generation
+        ctx = VideoContext(
+            video_id="v1",
+            duration=120.0,
+            summary="A video about cooking techniques",
+            topics=[Topic(label="cooking", confidence=0.9, timestamps=[5.0])],
+            speech_regions=[
+                SpeechRegion(start=0.0, end=10.0, transcript="Welcome to cooking", keywords=["cooking"]),
+            ],
+        )
+        await store.save(ctx)
+
+        result = await schema.execute(
+            'mutation { generateContent(videoId: "v1") { videoId titlesCount descriptionsCount alreadyExisted } }'
+        )
+        assert result.errors is None
+        data = result.data["generateContent"]
+        assert data["videoId"] == "v1"
+        assert data["titlesCount"] > 0
+        assert data["descriptionsCount"] > 0
+        assert data["alreadyExisted"] is False
+
+        # Verify saved to store
+        updated = await store.get_by_video_id("v1")
+        assert updated.content_variants is not None
+        assert len(updated.content_variants.titles) == data["titlesCount"]
+
+    async def test_generate_content_idempotent(self, gql_setup):
+        schema, store, mgr = gql_setup
+        # Pre-populate with content variants
+        ctx = VideoContext(
+            video_id="v1",
+            content_variants=ContentVariants(
+                titles=[
+                    TitleVariant(text="Existing", style=TitleStyle.HOOK, platform=Platform.TIKTOK),
+                ],
+                descriptions=[
+                    DescriptionVariant(text="Existing desc", platform=Platform.TIKTOK),
+                ],
+            ),
+        )
+        await store.save(ctx)
+
+        # First call
+        result1 = await schema.execute(
+            'mutation { generateContent(videoId: "v1") { titlesCount alreadyExisted } }'
+        )
+        assert result1.errors is None
+        assert result1.data["generateContent"]["alreadyExisted"] is True
+        assert result1.data["generateContent"]["titlesCount"] == 1
+
+        # Second call — same result
+        result2 = await schema.execute(
+            'mutation { generateContent(videoId: "v1") { titlesCount alreadyExisted } }'
+        )
+        assert result2.errors is None
+        assert result2.data["generateContent"]["titlesCount"] == 1
+        assert result2.data["generateContent"]["alreadyExisted"] is True
+
+    async def test_generate_content_missing_video(self, gql_setup):
+        schema, store, mgr = gql_setup
+        result = await schema.execute(
+            'mutation { generateContent(videoId: "missing") { videoId titlesCount alreadyExisted } }'
+        )
+        assert result.errors is None
+        data = result.data["generateContent"]
+        assert data["titlesCount"] == 0
+        assert data["alreadyExisted"] is False
