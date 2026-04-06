@@ -1,12 +1,12 @@
-# Video Sense — Circo's AI Video Intelligence Engine
+# Video Sense - AI Video Intelligence Engine
 
-Video Sense is the intelligence layer behind Circo's creator platform. It analyzes
+Video Sense is the intelligence layer behind, It analyzes
 video content — audio, scenes, speech, motion, narrative — and produces actionable
 outputs: teaser clips, platform-specific upload presets, content variants, thumbnail
 crop recommendations, and monetization signals.
 
 It is not a standalone product. It is a pipeline system designed to be embedded into
-Circo Studio, Broadcast, Series, and Reach.
+internal tools Studio, Broadcast, Series, and Reach at Circo
 
 ## Pipeline Versions
 
